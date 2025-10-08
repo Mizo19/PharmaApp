@@ -4,6 +4,7 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import Header from "./header";
 import FacturePDF from "./FacturePDF";
 import ClientModal from "./ClientModal";
+import { Box, Button, Stack, TextField, Typography } from "@mui/material";
 import {
   Table,
   TableBody,
@@ -526,47 +527,53 @@ export default function App() {
 
         {/* Buttons Section */}
         <div className="flex flex-col gap-3">
-          <button
-            className="bg-white-600  hover:bg-emerald-700 text-blue-700 px-4 py-2 rounded shadow"
-            onClick={() => searchInputRef.current?.focus()}
-          >
-            Focus Nom (F2)
-          </button>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 3 }}>
+            {/* Inputs */}
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <TextField label="Nom du patient" size="small" fullWidth />
+              <TextField label="Code / Barcode" size="small" fullWidth />
+            </Stack>
 
-          <button
-            className="bg-white-600  hover:bg-emerald-700 text-blue-700  px-4 py-2 rounded shadow"
-            onClick={() => barcodeInputRef.current?.focus()}
-          >
-            Focus Code (F4)
-          </button>
-          <button
-            className="bg-white-600 hover:bg-emerald-700 text-blue-700 px-4 py-2 rounded shadow"
-            onClick={() => setClientModalOpen(true)}
-          >
-            Vente Crédit
-          </button>
+            {/* Buttons */}
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => setClientModalOpen(true)}
+              >
+                Vente Crédit
+              </Button>
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={() => handleVenteEspeces("TPE", "Aucun")}
+              >
+                Vente TPE
+              </Button>
+              <Button
+                variant="contained"
+                color="success"
+                onClick={() => handleVenteEspeces("Especes", "Aucun")}
+              >
+                ✅ Vente Espèces
+              </Button>
+            </Stack>
 
-          <button
-            className="bg-white-600  hover:bg-emerald-700 text-blue-700  px-4 py-2 rounded shadow"
-            onClick={() => handleVenteEspeces("TPE", "Aucun")}
-          >
-            Vente TPE
-          </button>
+            {/* Summary */}
+            <Typography>
+              Total Articles: {totalarticle} | Total: {total.toLocaleString()}{" "}
+              MAD
+            </Typography>
 
-          <button
-            ref={venteEspecesRef}
-            className="bg-white-600 hover:bg-emerald-700 text-blue-700 px-4 py-2 rounded shadow"
-            onClick={() => handleVenteEspeces("Especes", "Aucun")}
-          >
-            ✅ Vente Espèces
-          </button>
-          <FacturePDF
-            cart={cart}
-            total={total}
-            totalArticle={totalarticle}
-            patientName="Mazine SABRI"
-            Pharmacien="Dr RABAB SABRI"
-          />
+            {/* PDF */}
+            <FacturePDF
+              cart={cart}
+              total={total}
+              totalArticle={totalarticle}
+              patientName="Mazine SABRI"
+              Pharmacien="Dr RABAB SABRI"
+            />
+          </Box>
         </div>
       </div>
       <ClientModal

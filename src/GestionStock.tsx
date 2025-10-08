@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import axios from "axios";
 import {
   Table,
@@ -42,41 +42,69 @@ const GestionStock: React.FC = () => {
   const [lastEditedId, setLastEditedId] = useState<number | null>(null);
   const [categorieFilter, setCategorieFilter] = useState<string>("");
   const [search, setSearch] = useState<string>("");
+  const [debouncedSearch, setDebouncedSearch] = useState<string>("");
   const tableRef = useRef<HTMLDivElement>(null);
 
-  const fetchMedicines = async () => {
-    try {
-      const res = await axios.get<Medicine[]>(
-        "http://localhost:7194/api/medicines"
-      );
-      setMedicines(res.data);
-    } catch (error) {
-      console.error("Error fetching medicines:", error);
-    }
-  };
-
+  // 🔹 Debounce search input
   useEffect(() => {
-    fetchMedicines();
-    const savedId = localStorage.getItem("lastEditedId");
-    if (savedId) {
-      setLastEditedId(Number(savedId));
-    }
+    const handler = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(handler);
+  }, [search]);
+
+  // 🔹 Fetch medicines
+  useEffect(() => {
+    axios
+      .get<Medicine[]>("http://localhost:7194/api/medicines")
+      .then((res) => setMedicines(res.data))
+      .catch((err) => console.error("Fetch error:", err));
   }, []);
 
+  // 🔹 Load last edited ID from localStorage
+  useEffect(() => {
+    const savedId = localStorage.getItem("lastEditedId");
+    if (savedId) setLastEditedId(Number(savedId));
+  }, []);
+
+  // 🔹 Scroll to last edited row
   useEffect(() => {
     if (lastEditedId && tableRef.current) {
       const row = tableRef.current.querySelector(
         `tr[data-id='${lastEditedId}']`
       );
-      if (row) {
+      if (row)
         (row as HTMLElement).scrollIntoView({
           behavior: "smooth",
           block: "center",
         });
-      }
     }
   }, [lastEditedId, medicines]);
 
+  // 🔹 Filtered and sorted medicines (useMemo for performance)
+  const filteredMedicines = useMemo(() => {
+    return medicines
+      .filter((m) => (categorieFilter ? m.categorie === categorieFilter : true))
+      .filter((m) =>
+        debouncedSearch
+          ? (m.nom_medicament || "")
+              .toLowerCase()
+              .includes(debouncedSearch.toLowerCase())
+          : true
+      )
+      .sort((a, b) =>
+        (a.nom_medicament || "").localeCompare(b.nom_medicament || "")
+      );
+  }, [medicines, categorieFilter, debouncedSearch]);
+
+  // 🔹 Stats
+  const productsInStock = filteredMedicines.filter(
+    (m) => (m.quantite ?? 0) > 0
+  ).length;
+  const totalStockValue = filteredMedicines.reduce(
+    (acc, m) => acc + (m.ppv ?? 0) * (m.quantite ?? 0),
+    0
+  );
+
+  // 🔹 Handlers
   const handleEdit = (medicine: Medicine) => {
     setSelectedMedicine(medicine);
     setDialogState(medicine);
@@ -124,24 +152,6 @@ const GestionStock: React.FC = () => {
     }
   };
 
-  const productsInStock = medicines.filter((m) => (m.quantite ?? 0) > 0).length;
-  const totalStockValue = medicines.reduce(
-    (acc, m) => acc + (m.ppv ?? 0) * (m.quantite ?? 0),
-    0
-  );
-
-  const sortedMedicines = [...medicines].sort((a, b) =>
-    (a.nom_medicament || "").localeCompare(b.nom_medicament || "")
-  );
-
-  const filteredMedicines = sortedMedicines.filter(
-    (m) =>
-      (categorieFilter ? m.categorie === categorieFilter : true) &&
-      (search
-        ? (m.nom_medicament || "").toLowerCase().includes(search.toLowerCase())
-        : true)
-  );
-
   return (
     <div>
       <Header utilisateur="Rabab SABRI" titre="Gestion Stocks" />
@@ -149,7 +159,7 @@ const GestionStock: React.FC = () => {
         Gestion du Stock
       </Typography>
 
-      {/* Toolbar with stats and filters */}
+      {/* Toolbar */}
       <Box
         sx={{
           display: "flex",
