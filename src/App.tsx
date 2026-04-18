@@ -59,7 +59,7 @@ export default function App() {
         <Route
           path="/ajout-produit"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedForNonAdmin>
               <AjoutProduit />
             </ProtectedRoute>
           }
@@ -67,7 +67,7 @@ export default function App() {
         <Route
           path="/Venteshistorique"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedForNonAdmin>
               <HistoriqueVentes />
             </ProtectedRoute>
           }
@@ -91,7 +91,7 @@ export default function App() {
         <Route
           path="/Credit"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedForNonAdmin>
               <GestionCredit />
             </ProtectedRoute>
           }
@@ -99,7 +99,7 @@ export default function App() {
         <Route
           path="/Reglages"
           element={
-            <ProtectedRoute allowedForNonAdmin>
+            <ProtectedRoute >
               <SettingsPage />
             </ProtectedRoute>
           }

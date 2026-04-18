@@ -1,5 +1,5 @@
 import Header from "./header";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import axios from "axios";
 import {
   Table,
@@ -42,6 +42,8 @@ export default function HistoriqueVentes() {
 
   const [filterMonth, setFilterMonth] = useState<string>("");
   const [filterYear, setFilterYear] = useState<string>("");
+
+  const tableRef = useRef<HTMLDivElement>(null);
 
   // -------------------- Fetch Sales --------------------
   useEffect(() => {
@@ -126,6 +128,36 @@ export default function HistoriqueVentes() {
     });
   }, [medicines, filterMonth, filterYear]);
 
+  // -------------------- Impression --------------------
+  const handlePrint = () => {
+    const printContent = tableRef.current?.innerHTML;
+    const printWindow = window.open("", "_blank");
+    if (printWindow && printContent) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Caisse du jour</title>
+            <style>
+              body { font-family: Arial; padding: 20px; }
+              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+              th, td { border: 1px solid #000; padding: 8px; text-align: center; }
+              th { background-color: #f0f0f0; }
+              h2 { text-align: center; color: #2e7d32; }
+              .total { font-weight: bold; font-size: 18px; text-align: right; margin-top: 20px; }
+            </style>
+          </head>
+          <body>
+            <h2>Caisse du jour (${new Date().toLocaleDateString()})</h2>
+            ${printContent}
+            <div class="total">Total: ${totalSalesFiltered.toFixed(2)} MAD</div>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
+
   return (
     <div className="p-6 flex flex-col space-y-6 bg-gradient-to-br from-emerald-50 to-emerald-100">
       <Header titre="Gestion d'Inventaires" />
@@ -157,13 +189,21 @@ export default function HistoriqueVentes() {
             Réinitialiser
           </button>
         </div>
-        <div className="text-lg font-semibold">
-          Total : {totalSalesFiltered.toFixed(2)} MAD
+        <div className="flex items-center gap-4">
+          <div className="text-lg font-semibold">
+            Total : {totalSalesFiltered.toFixed(2)} MAD
+          </div>
+          <button
+            className="px-3 py-1 bg-green-600 text-white rounded-lg"
+            onClick={handlePrint}
+          >
+            🖨️ Imprimer Caisse du Jour
+          </button>
         </div>
       </div>
 
       {/* -------------------- Table Sales -------------------- */}
-      <div className="bg-white p-4 rounded-2xl shadow overflow-x-auto">
+      <div ref={tableRef} className="bg-white p-4 rounded-2xl shadow overflow-x-auto">
         <Table>
           <TableHead>
             <TableRow>

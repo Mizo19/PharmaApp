@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect,useRef, useState } from "react";
 import axios from "axios";
 import "bootstrap/dist/css/bootstrap.min.css";
 import Header from "./header";
@@ -7,6 +7,7 @@ import ClientModal from "./ClientModal";
 import AvoirModal from "./AvoirModal";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
+import { useNavigate } from "react-router-dom";
 
 import { Box, Button, Stack, TextField } from "@mui/material";
 import {
@@ -56,6 +57,9 @@ type Medicine = {
 type CartItem = Medicine & { quantite: number };
 
 export default function App() {
+
+ const navigate = useNavigate(); 
+  const handleAjoutProduit = () => navigate("/ajout-produit");
   const [showAvoirModal, setShowAvoirModal] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [barcodeText, setBarcodeText] = useState("");
@@ -80,16 +84,30 @@ export default function App() {
   const barcodeInputRef = useRef<HTMLInputElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const venteEspecesRef = useRef<HTMLButtonElement | null>(null);
+  const codeInputRef = useRef<HTMLInputElement | null>(null);
 
   const barcodeBuffer = useRef<string>("");
   const scanTimeout = useRef<number | null>(null);
   const lastScanRef = useRef<{ code: string; ts: number } | null>(null);
   const PROCESS_DEBOUNCE_MS = 80;
 
+ const [patientName, setPatientName] = useState(""); // state to hold input value
+
+   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setPatientName(event.target.value);
+  };
+
   useEffect(() => {
     localStorage.setItem("pharmaCart", JSON.stringify(cart));
   }, [cart]);
-
+useEffect(() => {
+  if (showCodeModal) {
+    const t = setTimeout(() => {
+      codeInputRef.current?.focus();
+    }, 50);
+    return () => clearTimeout(t);
+  }
+}, [showCodeModal]);
   useEffect(() => {
     axios
       .get("http://localhost:7194/api/Medicines")
@@ -337,130 +355,155 @@ export default function App() {
     if (match) addToCart(match);
   };
 
+
+
   const total = cart.reduce(
     (sum, c) => sum + c.ppv * c.quantite * (1 - (c.reduction || 0) / 100),
     0
   );
   const totalarticle = cart.reduce((sum, c) => sum + c.quantite, 0);
 
-  const confirmSale = () => setShowCodeModal(true);
+  const confirmSale = () => setShowCodeModal(false);
 
   // 🔹 Fonction principale : vente (Espèces ou Crédit)
-  const handleVente = async (typeVente: string, client: string) => {
-    if (cart.length === 0) {
-      alert("Le panier est vide !");
+const handleVente = async (typeVente: string, client: string) => {
+  if (cart.length === 0) {
+    alert("Le panier est vide !");
+    return;
+  }
+
+  const totalVente = cart.reduce(
+    (sum, item) => sum + item.quantite * item.ppv,
+    0
+  );
+
+  const ventesData = cart.map((item) => ({
+    date: new Date().toISOString(),
+    medicineId: item.id,
+    medicines: item.nom_medicament,
+    totalArticles: item.quantite,
+    totalPrice: item.quantite * item.ppv,
+    typeDeVente: typeVente,
+    numeroDeVente: 0,
+    nomClient: client,
+    responsable_Vente: utilisateur,
+    quantiteVendue: item.quantite,
+  }));
+
+  try {
+    // 1️⃣ Enregistrer la vente
+    const response = await fetch("http://localhost:7194/api/sales", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(ventesData),
+    });
+
+    if (!response.ok) {
+      alert("⚠️ Erreur lors de l'enregistrement de la vente");
       return;
     }
 
-    const totalVente = cart.reduce(
-      (sum, item) => sum + item.quantite * item.ppv,
-      0
-    );
-
-    const ventesData = cart.map((item) => ({
-      date: new Date().toISOString(),
-      medicineId: item.id,
-      medicines: item.nom_medicament,
-      totalArticles: item.quantite,
-      totalPrice: item.quantite * item.ppv,
-      typeDeVente: typeVente,
-      numeroDeVente: 0,
-      nomClient: client,
-      responsable_Vente: utilisateur,
-      quantiteVendue: item.quantite,
-    }));
-
-    try {
-      // 1️⃣ Enregistrer la vente
-      const response = await fetch("http://localhost:7194/api/sales", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(ventesData),
-      });
-
-      if (!response.ok) {
-        alert("⚠️ Erreur lors de l'enregistrement de la vente");
-        return;
-      }
-
-      // 2️⃣ Mise à jour du stock
-      for (const item of cart) {
-        await fetch(
-          `http://localhost:7194/api/medicines/updateStock/${item.id}`,
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(item.quantite),
-          }
-        );
-      }
-
-      // 3️⃣ Si c’est une vente à crédit → appel de la fonction de crédit
-      if (
-        typeVente.toLowerCase() === "crédit" ||
-        typeVente.toLowerCase() === "credit"
-      ) {
-        await handleCreditUpdate(client, totalVente);
-      }
-
-      alert("✅ Vente enregistrée et stock mis à jour !");
-      setCart([]);
-    } catch (err) {
-      console.error("Erreur:", err);
-      alert("⚠️ Impossible de contacter le serveur");
+    // 2️⃣ Mise à jour du stock
+    for (const item of cart) {
+      await fetch(
+        `http://localhost:7194/api/medicines/updateStock/${item.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(item.quantite),
+        }
+      );
     }
-    confirmSale();
-  };
+
+    // 3️⃣ Si c’est une vente à crédit → appel de la fonction de crédit
+    if (
+      typeVente.toLowerCase() === "crédit" ||
+      typeVente.toLowerCase() === "credit"
+    ) {
+      await handleCreditUpdate(client, totalVente);
+    }
+
+    // 4️⃣ 🧹 Nettoyage des doublons (supprime les lignes avec DATE_PER vide)
+    await fetch("http://localhost:7194/api/medicines/cleanupDuplicates", {
+      method: "POST",
+    });
+// 5️⃣ Confirmation visuelle
+    await Swal.fire({
+      icon: "success",
+      title: "✅ Vente enregistrée",
+      text: "Le stock a été mis à jour et les doublons ont été nettoyés !",
+     
+    });
+
+    
+    setCart([]);
+  } catch (err) {
+    await Swal.fire({
+      icon: "error",
+      title: "Erreur",
+      text: "Impossible de se connecter à la base de données",
+      confirmButtonText: "OK",
+      confirmButtonColor: "#2563eb",
+    });
+  }
+
+  confirmSale();
+};
 
   // 🔹 Fonction séparée : mise à jour/création du crédit
-  const handleCreditUpdate = async (client: string, montant: number) => {
-    try {
-      const creditUrl = "http://localhost:7194/api/credits";
+const handleCreditUpdate = async (client: string, montant: number) => {
+  try {
+    const creditUrl = "http://localhost:7194/api/credits";
 
-      const existingResp = await fetch(creditUrl);
-      if (!existingResp.ok) {
-        console.error("Erreur fetch crédits");
-        return;
-      }
+    // Récupération des crédits existants
+    const existingResp = await fetch(creditUrl);
+    if (!existingResp.ok) return;
 
-      const existingCredits = await existingResp.json();
-      const existingClient = existingCredits.find(
-        (c: any) => c.clientName.toLowerCase() === client.toLowerCase()
-      );
+    const existingCredits = await existingResp.json();
+    console.log(client);
 
-      if (existingClient) {
-        // ✅ Client déjà existant → mise à jour
-        const updatedCredit = {
-          ...existingClient,
-          montantTotal: existingClient.montantTotal + montant,
-        };
+    // Recherche du client existant (insensible à la casse)
+    const existingClient = existingCredits.find(
+      (c: any) => c.clientName.toLowerCase() === client.toLowerCase()
+    );
 
-        await fetch(`${creditUrl}/${existingClient.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updatedCredit),
-        });
-      } else {
-        // 🆕 Nouveau client
-        const newCredit = {
-          clientName: client,
-          montantTotal: montant,
-          montantRestant: 0,
-          dateCreation: new Date().toISOString(),
-          estPaye: false,
-        };
+    if (existingClient) {
+      // Client existant → mise à jour
+      const updatedCredit = {
+        ...existingClient,
+        montantTotal: Number(existingClient.montantTotal) + montant,
+        montantRestant:( existingClient.montantRestant ?? 0) + montant,
+        estPaye: false,
+        dateCreation: existingClient.dateCreation,
+      };
 
-        await fetch(creditUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(newCredit),
-        });
-      }
-    } catch (err) {
-      console.error("Erreur gestion crédit:", err);
-      alert("⚠️ Erreur lors de la mise à jour du crédit client");
+      await fetch(`${creditUrl}/${existingClient.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedCredit),
+      });
+    } else {
+      // Nouveau client
+      const newCredit = {
+        clientName: client,
+        montantTotal: montant,
+        montantRestant: 0,
+        dateCreation: new Date().toISOString(),
+        estPaye: false,
+      };
+
+      await fetch(creditUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newCredit),
+      });
     }
-  };
+  } catch {
+    // Erreur silencieuse côté client
+  }
+};
+
+
 
   return (
     <div className="h-screen bg-gray-100 p-4 bg-gradient-to-br from-emerald-50 to-emerald-100">
@@ -468,19 +511,19 @@ export default function App() {
 
       {/* Inputs */}
       <div className="p-4 flex items-center gap-3">
-        <input
-          ref={searchInputRef}
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          onKeyDown={handleSearchKeyDown}
-          placeholder="🔍 Nom, Forme, PPV (Enter to add)"
-          className="flex-1 p-3 w-1/4 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-        />
+          <button
+          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg font-semibold shadow-md"
+          
+          onClick={handleAjoutProduit}
+        >
+          + Ajouter Produit
+        </button>
+   
 
         <input
           ref={barcodeInputRef}
           value={barcodeText}
-          placeholder="🔍 Code (scan here)"
+          placeholder="🔍 Code (scan here) F4"
           onKeyDown={handleBarcodeKeyDown}
           onPaste={handleBarcodePaste}
           readOnly={false}
@@ -488,26 +531,16 @@ export default function App() {
           className="flex-1 p-3 w-1/4 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
         />
 
-        <button
-          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg font-semibold shadow-md"
-          onClick={() => {
-            const filtered = products.filter((p) =>
-              p.nom_medicament.toLowerCase().includes(searchText.toLowerCase())
-            );
-            if (filtered.length === 1) addToCart(filtered[0]);
-            else if (filtered.length === 0) alert("Aucun produit trouvé");
-            else alert("Plusieurs produits trouvés, précisez la recherche");
-          }}
-        >
-          + Ajouter Produit
-        </button>
+          <input
+          ref={searchInputRef}
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          onKeyDown={handleSearchKeyDown}
+          placeholder="🔍 Nom, Forme, PPV (Enter to add) F2"
+          className="flex-1 p-3 w-1/4 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        />
 
-        <button
-          className="bg-red-600 hover:bg-red-700 text-white px-5 py-3 rounded-lg font-semibold shadow-md"
-          onClick={confirmSale}
-        >
-          Confirmer
-        </button>
+       
       </div>
 
       {/* Layout */}
@@ -599,6 +632,7 @@ export default function App() {
               </TableBody>
             </Table>
           </span>
+           
         </div>
 
         <div className="backdrop-blur-lg bg-white/30 rounded-2xl shadow-xl p-5 border border-white/50">
@@ -707,12 +741,21 @@ export default function App() {
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 3 }}>
             {/* Inputs */}
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-              <TextField label="Nom du patient" size="small" fullWidth />
+              <TextField label="Nom du patient" size="small"     value={patientName} 
+        onChange={handleChange}   fullWidth />
               <TextField label="Code / Barcode" size="small" fullWidth />
             </Stack>
 
             {/* Buttons */}
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <Button
+                variant="contained"
+                color="success"
+                onClick={() => handleVente("Especes", "Aucun")}
+                ref={venteEspecesRef}
+              >
+                ✅ Vente Espèces F3
+              </Button>
               <Button
                 variant="contained"
                 color="primary"
@@ -727,13 +770,7 @@ export default function App() {
               >
                 Vente TPE
               </Button>
-              <Button
-                variant="contained"
-                color="success"
-                onClick={() => handleVente("Especes", "Aucun")}
-              >
-                ✅ Vente Espèces
-              </Button>
+              
               <button
                 onClick={() => setShowAvoirModal(true)}
                 className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
@@ -758,8 +795,8 @@ export default function App() {
               cart={cart}
               total={total}
               totalArticle={totalarticle}
-              patientName="Mazine SABRI"
-              Pharmacien="Dr RABAB SABRI"
+              patientName={patientName}
+              Pharmacien="Pharmacie El Abawain"
             />
           </Box>
         </div>
@@ -773,49 +810,76 @@ export default function App() {
         }}
       />
       {/* Modal */}
-      {showCodeModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-96">
-            <h2 className="text-lg font-bold mb-4">
-              Entrez le code pour confirmer la vente
-            </h2>
-            <input
-              type="text"
-              value={codeInput}
-              onChange={(e) => setCodeInput(e.target.value)}
-              className="border p-2 w-full mb-4 rounded"
-              placeholder="Code..."
-            />
-            <div className="flex justify-end space-x-2">
-              <button
-                className="bg-blue-600 text-white px-4 py-2 rounded"
-                onClick={() => {
-                  if (codeInput === "1234") {
-                    alert("Code correct, vente confirmée !");
-                    setShowCodeModal(false);
-                    setCart([]);
-                    setCodeInput("");
-                    setUtilisateur("Mazine");
-                  } else {
-                    alert("Code incorrect !");
-                  }
-                }}
-              >
-                Valider
-              </button>
-              <button
-                className="bg-gray-300 px-4 py-2 rounded"
-                onClick={() => {
-                  setShowCodeModal(false);
-                  setCodeInput("");
-                }}
-              >
-                Annuler
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+{showCodeModal && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white p-6 rounded-lg shadow-lg w-96">
+      <h2 className="text-lg font-bold mb-4 text-gray-800">
+        Entrez le code d’accès pour confirmer la vente
+      </h2>
+
+      {/* Champ de code */}
+      <input
+       ref={codeInputRef} // 👈 AJOUT ICI
+        type="password"
+        value={codeInput}
+        onChange={(e) => setCodeInput(e.target.value)}
+     onKeyDown={async (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const btn = document.getElementById("validateButton");
+    if (btn) (btn as HTMLButtonElement).click();
+  }
+}}
+        className="border p-2 w-full mb-4 rounded focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
+        placeholder="••••••••"
+      />
+
+      {/* Boutons */}
+      <div className="flex justify-end space-x-2">
+        <button
+          id="validateButton"
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
+          onClick={async () => {
+            try {
+              const res = await fetch("http://localhost:7194/api/utilisateurs");
+              if (!res.ok) throw new Error("Erreur serveur");
+              const data = await res.json();
+
+             const user = data.find((u: any) => u.motDePasse === codeInput.trim());
+
+              if (user) {
+                localStorage.setItem("connectedUser", user.nomUtilisateur);
+                localStorage.setItem("isAdmin", user.isAdmin ? "true" : "false");
+
+                setUtilisateur(user.nomUtilisateur);
+                setShowCodeModal(false);
+                setCart([]);
+                setCodeInput("");
+              } else {
+                alert("Code incorrect !");
+              }
+            } catch (err) {
+              alert("Erreur de connexion au serveur");
+            }
+          }}
+        >
+          Valider
+        </button>
+
+        <button
+          className="bg-gray-300 px-4 py-2 rounded hover:bg-gray-400 transition"
+          onClick={() => {
+            setShowCodeModal(false);
+            setCodeInput("");
+          }}
+        >
+          Annuler
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
       {showAvoirModal && (
         <AvoirModal
           cart={cart}

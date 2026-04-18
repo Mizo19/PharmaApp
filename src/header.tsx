@@ -111,7 +111,7 @@ const Header = ({ titre }: HeaderProps) => {
             className="hover:bg-white/15 transition-all duration-200 px-4 py-2 rounded-lg flex items-center gap-2 hover:shadow-lg backdrop-blur-sm"
             onClick={handleStock}
           >
-            <FaBox className="text-base" /> Stock
+            <FaBox className="text-base" /> Stock et Inventaire
           </button>
           <button
             className="hover:bg-white/15 transition-all duration-200 px-4 py-2 rounded-lg flex items-center gap-2 hover:shadow-lg backdrop-blur-sm"
@@ -123,7 +123,7 @@ const Header = ({ titre }: HeaderProps) => {
             className="hover:bg-white/15 transition-all duration-200 px-4 py-2 rounded-lg flex items-center gap-2 hover:shadow-lg backdrop-blur-sm"
             onClick={handleVentes}
           >
-            <FaClipboardList className="text-base" /> Inventaire
+            <FaClipboardList className="text-base" /> Historique de Ventes 
           </button>
           <button
             className="hover:bg-white/15 transition-all duration-200 px-4 py-2 rounded-lg flex items-center gap-2 hover:shadow-lg backdrop-blur-sm"
@@ -173,7 +173,7 @@ const Header = ({ titre }: HeaderProps) => {
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-500 flex items-center justify-center font-bold text-[#1976d2] text-sm shadow-md">
               {getInitials(utilisateur)}
             </div>
-            <span className="text-sm font-semibold">Dr. {utilisateur}</span>
+            <span className="text-sm font-semibold">Welcome. {utilisateur}</span>
           </div>
         </div>
       </div>

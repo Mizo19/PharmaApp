@@ -14,6 +14,10 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import Swal from "sweetalert2";
+import withReactContent from "sweetalert2-react-content";
+
+const MySwal = withReactContent(Swal);
 
 interface Credit {
   id: number;
@@ -51,9 +55,7 @@ const GestionCredit: React.FC = () => {
   // Charger crédits
   const fetchCredits = async () => {
     try {
-      const res = await axios.get<Credit[]>(
-        "http://localhost:7194/api/credits"
-      );
+      const res = await axios.get<Credit[]>("http://localhost:7194/api/credits");
       setCredits(res.data);
     } catch (err) {
       console.error("Erreur fetch crédits:", err);
@@ -63,9 +65,7 @@ const GestionCredit: React.FC = () => {
   // Charger paiements d'un crédit
   const fetchPaiements = async (creditId: number) => {
     try {
-      const res = await axios.get<Paiement[]>(
-        `http://localhost:7194/api/credits/${creditId}/paiements`
-      );
+      const res = await axios.get<Paiement[]>(`http://localhost:7194/api/credits/${creditId}/paiements`);
       setPaiements(res.data);
     } catch (err) {
       console.error("Erreur fetch paiements:", err);
@@ -94,8 +94,27 @@ const GestionCredit: React.FC = () => {
   };
 
   const handlePay = async (payerTout = false) => {
-    if (!selectedCredit || montantPaiement <= 0) return;
+    if (!selectedCredit) return;
+
     const montant = payerTout ? selectedCredit.montantRestant : montantPaiement;
+    if (montant <= 0) return;
+
+    // Double confirmation popup
+    const { isConfirmed } = await MySwal.fire({
+      title: "Confirmer le paiement",
+      html: `
+        <p>Client: <strong>${selectedCredit.clientName}</strong></p>
+        <p>Montant: <strong>${montant.toLocaleString()} MAD</strong></p>
+        <p>${payerTout ? "Vous allez payer la totalité du crédit." : ""}</p>
+      `,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Oui, payer",
+      cancelButtonText: "Annuler",
+      reverseButtons: true,
+    });
+
+    if (!isConfirmed) return;
 
     try {
       const res = await axios.post(
@@ -103,19 +122,44 @@ const GestionCredit: React.FC = () => {
         { montant }
       );
 
-      // Met à jour le crédit localement
+      // Update local state
       setCredits((prev) =>
         prev.map((c) =>
-          c.id === selectedCredit.id ? { ...c, ...res.data } : c
+          c.id === selectedCredit.id
+            ? { ...c, ...res.data, estPaye: payerTout ? true : res.data.estPaye }
+            : c
         )
       );
 
-      // Recharge la liste des paiements
-      fetchPaiements(selectedCredit.id);
+      // Update selected credit
+      setSelectedCredit((prev) =>
+        prev
+          ? { ...prev, montantRestant: payerTout ? 0 : prev.montantRestant - montant, estPaye: payerTout ? true : prev.estPaye }
+          : prev
+      );
 
+      fetchPaiements(selectedCredit.id);
       setMontantPaiement(0);
+
+      // Success toast
+      MySwal.fire({
+        icon: "success",
+        title: "✅ Paiement enregistré",
+        text: payerTout
+          ? "Le crédit a été complètement payé !"
+          : "Le paiement partiel a été enregistré.",
+        timer: 2000,
+        showConfirmButton: false,
+        toast: true,
+        position: "top-end",
+      });
     } catch (err) {
       console.error("Erreur paiement:", err);
+      MySwal.fire({
+        icon: "error",
+        title: "Erreur",
+        text: "Le paiement n'a pas pu être enregistré.",
+      });
     }
   };
 
@@ -132,7 +176,7 @@ const GestionCredit: React.FC = () => {
           <TableHead sx={{ backgroundColor: "#1976d2" }}>
             <TableRow>
               <TableCell sx={{ color: "white" }}>Client</TableCell>
-              <TableCell sx={{ color: "white" }}>Montant Total</TableCell>
+              <TableCell sx={{ color: "white"  ,display: 'none'  }}>Montant Total</TableCell>
               <TableCell sx={{ color: "white" }}>Montant Restant</TableCell>
               <TableCell sx={{ color: "white" }}>Date</TableCell>
               <TableCell sx={{ color: "white" }}>Statut</TableCell>
@@ -143,15 +187,9 @@ const GestionCredit: React.FC = () => {
             {credits.map((credit) => (
               <TableRow key={credit.id}>
                 <TableCell>{credit.clientName}</TableCell>
-                <TableCell>
-                  {credit.montantTotal.toLocaleString()} MAD
-                </TableCell>
-                <TableCell>
-                  {credit.montantRestant.toLocaleString()} MAD
-                </TableCell>
-                <TableCell>
-                  {new Date(credit.dateCreation).toLocaleDateString()}
-                </TableCell>
+                <TableCell sx={{ display: 'none' }} >{credit.montantTotal.toLocaleString()} MAD</TableCell>
+                <TableCell>{credit.montantRestant.toLocaleString()} MAD</TableCell>
+                <TableCell>{new Date(credit.dateCreation).toLocaleDateString()}</TableCell>
                 <TableCell>
                   {credit.estPaye ? (
                     <Typography color="green">Payé</Typography>
@@ -161,11 +199,7 @@ const GestionCredit: React.FC = () => {
                 </TableCell>
                 <TableCell>
                   {!credit.estPaye && (
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      onClick={() => handleSelectCredit(credit)}
-                    >
+                    <Button variant="contained" color="primary" onClick={() => handleSelectCredit(credit)}>
                       Gérer Paiement
                     </Button>
                   )}
@@ -194,18 +228,10 @@ const GestionCredit: React.FC = () => {
                   max: selectedCredit?.montantRestant ?? 0,
                 }}
               />
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={() => handlePay(false)}
-              >
+              <Button variant="contained" color="primary" onClick={() => handlePay(false)}>
                 Payer
               </Button>
-              <Button
-                variant="outlined"
-                color="secondary"
-                onClick={() => handlePay(true)}
-              >
+              <Button variant="outlined" color="secondary" onClick={() => handlePay(true)}>
                 Payer Tout
               </Button>
             </Box>
@@ -226,9 +252,7 @@ const GestionCredit: React.FC = () => {
                     paiements.map((p) => (
                       <TableRow key={p.id}>
                         <TableCell>{p.montant.toLocaleString()} MAD</TableCell>
-                        <TableCell>
-                          {new Date(p.datePaiement).toLocaleString()}
-                        </TableCell>
+                        <TableCell>{new Date(p.datePaiement).toLocaleString()}</TableCell>
                       </TableRow>
                     ))
                   ) : (

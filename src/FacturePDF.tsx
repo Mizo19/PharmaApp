@@ -17,6 +17,50 @@ interface FacturePDFProps {
   Pharmacien: string;
 }
 
+// Fonction utilitaire pour convertir un montant en lettres (français)
+const numberToFrenchWords = (value: number) => {
+  const unite = ["", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf"];
+  const dizaine = ["", "dix", "vingt", "trente", "quarante", "cinquante", "soixante", "soixante-dix", "quatre-vingt", "quatre-vingt-dix"];
+  
+  const convertHundreds = (num: number): string => {
+    let words = "";
+    const centaine = Math.floor(num / 100);
+    const reste = num % 100;
+
+    if (centaine > 0) {
+      words += centaine === 1 ? "cent" : `${unite[centaine]} cent`;
+      if (reste > 0) words += " ";
+    }
+
+    if (reste > 0) {
+      if (reste < 10) {
+        words += unite[reste];
+      } else if (reste < 20) {
+        const special = ["dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf"];
+        words += special[reste - 10];
+      } else {
+        const d = Math.floor(reste / 10);
+        const u = reste % 10;
+        if (d === 7 || d === 9) {
+          words += dizaine[d] + (u + 10 > 0 ? "-" + unite[u + 10] : "");
+        } else {
+          words += dizaine[d] + (u > 0 ? "-" + unite[u] : "");
+        }
+      }
+    }
+    return words;
+  };
+
+  const dirhams = Math.floor(value);
+  const centimes = Math.round((value - dirhams) * 100);
+
+  let result = `${convertHundreds(dirhams)} dirhams`;
+  if (centimes > 0) {
+    result += ` et ${convertHundreds(centimes)} centimes`;
+  }
+  return result.charAt(0).toUpperCase() + result.slice(1);
+};
+
 const FacturePDF: React.FC<FacturePDFProps> = ({
   cart,
   total,
@@ -73,12 +117,8 @@ const FacturePDF: React.FC<FacturePDFProps> = ({
       headStyles: { fillColor: [34, 139, 34], textColor: 255 },
       styles: { fontSize: 11, cellPadding: 2 },
 
-      // ✅ Footer sur chaque page
       didDrawPage: (_data) => {
         const pageHeight = doc.internal.pageSize.height;
-
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "normal");
 
         // Ligne horizontale
         doc.text(
@@ -88,12 +128,14 @@ const FacturePDF: React.FC<FacturePDFProps> = ({
         );
 
         // Footer text
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
         doc.text(
-          "ADRESSE: 123 RUE IMAGINAIRE, CASABLANCA",
+          "Lotissement Al Wafaa 800H Deroua - IF: 14390907 – Patente: 55802006 – CNSS: 5446077",
           14,
           pageHeight - 20
         );
-        doc.text("TÉL: +212 6X XX XX XX", 14, pageHeight - 12);
+        doc.text("Tel: 05-22-51-40-49", 14, pageHeight - 12);
       },
     });
 
@@ -103,6 +145,12 @@ const FacturePDF: React.FC<FacturePDFProps> = ({
     doc.setFontSize(12);
     doc.text(`Nombre d’articles: ${totalArticle}`, 14, tableEndY + 10);
     doc.text(`TOTAL: ${total.toFixed(2)} DH`, 14, tableEndY + 18);
+
+    // Montant en lettres
+    const totalEnLettres = numberToFrenchWords(total);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(11);
+    doc.text(`arrêter la présente facture à la somme de : ${totalEnLettres}`, 14, tableEndY + 26);
 
     doc.save("Facture.pdf");
   };

@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import axios from "axios";
 import Header from "./header";
-
 import { Button } from "flowbite-react";
 
 type Medicine = {
@@ -22,6 +21,7 @@ type LineItem = {
   TOTAL_PPV: number;
   PH: number;
   TOTAL_PH: number;
+  DATE_PER: string; // new field
 };
 
 type Document = {
@@ -42,12 +42,11 @@ export default function GestionCommands() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Pagination / affichage progressif
-  const [displayCount, setDisplayCount] = useState(5); // pour recherche
-  const [itemPage, setItemPage] = useState(0); // pour tableau items
+  const [displayCount, setDisplayCount] = useState(5);
+  const [itemPage, setItemPage] = useState(0);
   const ITEMS_PER_PAGE = 10;
 
-  // Charger les médicaments
+  // Load medicines
   useEffect(() => {
     let isMounted = true;
     const loadMedicines = async () => {
@@ -68,13 +67,13 @@ export default function GestionCommands() {
     };
   }, []);
 
-  // Charger documents depuis localStorage
+  // Load saved documents
   useEffect(() => {
     const savedDocs = localStorage.getItem("documents");
     if (savedDocs) setDocuments(JSON.parse(savedDocs));
   }, []);
 
-  // Résultats filtrés + limite displayCount
+  // Filtered results
   const results = useMemo(() => {
     if (!search.trim()) return [];
     const searchLower = search.toLowerCase();
@@ -87,7 +86,7 @@ export default function GestionCommands() {
       .slice(0, displayCount);
   }, [search, medicines, displayCount]);
 
-  // Totaux
+  // Totals
   const { totalPPV, totalPH } = useMemo(
     () => ({
       totalPPV: items.reduce((sum, i) => sum + i.TOTAL_PPV, 0),
@@ -96,7 +95,7 @@ export default function GestionCommands() {
     [items]
   );
 
-  // Ajouter médicament
+  // Add medicine
   const addMedicine = useCallback((med: Medicine) => {
     setItems((prev) => {
       if (prev.find((i) => i.med.id === med.id)) return prev;
@@ -108,13 +107,14 @@ export default function GestionCommands() {
           TOTAL_PPV: 0,
           PH: Number(med.ph) || 0,
           TOTAL_PH: 0,
+          DATE_PER: med.datE_PER || "",
         },
       ];
     });
     setSearch("");
   }, []);
 
-  // Modifier quantité
+  // Update quantity
   const updateQuantity = useCallback((id: number, qty: number) => {
     setItems((prev) =>
       prev.map((i) =>
@@ -130,7 +130,7 @@ export default function GestionCommands() {
     );
   }, []);
 
-  // Modifier PH
+  // Update PH
   const updatePH = useCallback((id: number, ph: number) => {
     setItems((prev) =>
       prev.map((i) =>
@@ -139,7 +139,7 @@ export default function GestionCommands() {
     );
   }, []);
 
-  // Enregistrer document localement
+  // Add document locally
   const addDocument = useCallback(() => {
     if (!nDocument || !societe || !dateReceived || items.length === 0) return;
     const newDoc: Document = {
@@ -160,7 +160,7 @@ export default function GestionCommands() {
     setItemPage(0);
   }, [nDocument, societe, dateReceived, items]);
 
-  // Envoyer document au backend
+  // Push to backend
   const pushToDatabase = useCallback(async (doc: Document, index: number) => {
     try {
       const payload = {
@@ -173,6 +173,7 @@ export default function GestionCommands() {
           QTE_LIVR: i.QTE_LIVR,
           PU_PPV: i.med.ppv,
           PU_PPH: i.PH,
+          DATE_PER: i.DATE_PER,
           TOTAL_PPV: i.TOTAL_PPV,
           TOTAL_PPH: i.TOTAL_PH,
         })),
@@ -192,7 +193,7 @@ export default function GestionCommands() {
     }
   }, []);
 
-  // Supprimer document
+  // Remove document
   const removeDocument = useCallback((index: number) => {
     setDocuments((prev) => {
       const updated = [...prev];
@@ -293,6 +294,7 @@ export default function GestionCommands() {
                 <th>PU PPV</th>
                 <th>PU PH</th>
                 <th>Quantité</th>
+                <th>Date Péremption</th>
                 <th>Total PPV</th>
                 <th>Total PH</th>
               </tr>
@@ -323,6 +325,21 @@ export default function GestionCommands() {
                       }
                     />
                   </td>
+                  <td>
+                    <input
+                      type="date"
+                      value={i.DATE_PER}
+                      onChange={(e) =>
+                        setItems((prev) =>
+                          prev.map((item) =>
+                            item.med.id === i.med.id
+                              ? { ...item, DATE_PER: e.target.value }
+                              : item
+                          )
+                        )
+                      }
+                    />
+                  </td>
                   <td>{i.TOTAL_PPV.toFixed(2)}</td>
                   <td>{i.TOTAL_PH.toFixed(2)}</td>
                 </tr>
@@ -330,7 +347,7 @@ export default function GestionCommands() {
             </tbody>
             <tfoot>
               <tr className="bg-gray-100 font-bold">
-                <td colSpan={6} className="text-right">
+                <td colSpan={7} className="text-right">
                   Totaux
                 </td>
                 <td>{totalPPV.toFixed(2)}</td>
@@ -395,7 +412,7 @@ export default function GestionCommands() {
                 <li key={item.med.id}>
                   {item.med.nom_medicament} - QTE: {item.QTE_LIVR}, Total PPV:{" "}
                   {item.TOTAL_PPV.toFixed(2)}, Total PH:{" "}
-                  {item.TOTAL_PH.toFixed(2)}
+                  {item.TOTAL_PH.toFixed(2)}, DATE_PER: {item.DATE_PER}
                 </li>
               ))}
             </ul>

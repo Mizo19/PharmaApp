@@ -18,6 +18,7 @@ import {
   Box,
   Chip,
   Stack,
+  Autocomplete,
 } from "@mui/material";
 import Header from "./header";
 
@@ -30,51 +31,60 @@ interface Medicine {
   ppv: number | null;
   ph: string | null;
   quantite: number | null;
-  datE_PER: string | null;
+  datE_PER: string | null; // MMYYYY
   categorie: string | null;
 }
 
+const PAGE_SIZE = 50;
+
 const GestionStock: React.FC = () => {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
-  const [selectedMedicine, setSelectedMedicine] = useState<Medicine | null>(
-    null
-  );
+  const [selectedMedicine, setSelectedMedicine] = useState<Medicine | null>(null);
   const [dialogState, setDialogState] = useState<Partial<Medicine>>({});
   const [open, setOpen] = useState(false);
   const [lastEditedId, setLastEditedId] = useState<number | null>(null);
   const [categorieFilter, setCategorieFilter] = useState<string>("");
+  const [categories, setCategories] = useState<string[]>([]);
   const [search, setSearch] = useState<string>("");
   const [debouncedSearch, setDebouncedSearch] = useState<string>("");
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [newExpiryDate, setNewExpiryDate] = useState<string>("");
+  const [page, setPage] = useState(1);
+
   const tableRef = useRef<HTMLDivElement>(null);
 
-  // 🔹 Debounce search input
+  // Debounce search input
   useEffect(() => {
     const handler = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(handler);
   }, [search]);
 
-  // 🔹 Fetch medicines
+  // Fetch medicines
   useEffect(() => {
     axios
       .get<Medicine[]>("http://localhost:7194/api/medicines")
-      .then((res) => setMedicines(res.data))
+      .then((res) => {
+        setMedicines(res.data);
+
+        // Extract unique categories
+        const uniqueCats = Array.from(
+          new Set(res.data.map((m) => m.categorie).filter(Boolean))
+        ) as string[];
+        setCategories(uniqueCats);
+      })
       .catch((err) => console.error("Fetch error:", err));
   }, []);
 
-  // 🔹 Load last edited ID from localStorage
+  // Load last edited ID from localStorage
   useEffect(() => {
     const savedId = localStorage.getItem("lastEditedId");
     if (savedId) setLastEditedId(Number(savedId));
   }, []);
 
-  // 🔹 Scroll to last edited row
+  // Scroll to last edited row
   useEffect(() => {
     if (lastEditedId && tableRef.current) {
-      const row = tableRef.current.querySelector(
-        `tr[data-id='${lastEditedId}']`
-      );
+      const row = tableRef.current.querySelector(`tr[data-id='${lastEditedId}']`);
       if (row)
         (row as HTMLElement).scrollIntoView({
           behavior: "smooth",
@@ -83,32 +93,33 @@ const GestionStock: React.FC = () => {
     }
   }, [lastEditedId, medicines]);
 
-  // 🔹 Filtered and sorted medicines
+  // Filtered and sorted medicines
   const filteredMedicines = useMemo(() => {
     return medicines
       .filter((m) => (categorieFilter ? m.categorie === categorieFilter : true))
       .filter((m) =>
         debouncedSearch
-          ? (m.nom_medicament || "")
-              .toLowerCase()
-              .includes(debouncedSearch.toLowerCase())
+          ? (m.nom_medicament || "").toLowerCase().includes(debouncedSearch.toLowerCase())
           : true
       )
-      .sort((a, b) =>
-        (a.nom_medicament || "").localeCompare(b.nom_medicament || "")
-      );
+      .sort((a, b) => (a.nom_medicament || "").localeCompare(b.nom_medicament || ""));
   }, [medicines, categorieFilter, debouncedSearch]);
 
-  // 🔹 Stats
-  const productsInStock = filteredMedicines.filter(
-    (m) => (m.quantite ?? 0) > 0
-  ).length;
+  // Pagination
+  const totalPages = Math.ceil(filteredMedicines.length / PAGE_SIZE);
+  const paginatedMedicines = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredMedicines.slice(start, start + PAGE_SIZE);
+  }, [filteredMedicines, page]);
+
+  // Stats
+  const productsInStock = filteredMedicines.filter((m) => (m.quantite ?? 0) > 0).length;
   const totalStockValue = filteredMedicines.reduce(
     (acc, m) => acc + (m.ppv ?? 0) * (m.quantite ?? 0),
     0
   );
 
-  // 🔹 Handlers
+  // Handlers
   const handleEdit = (medicine: Medicine) => {
     setSelectedMedicine(medicine);
     setDialogState(medicine);
@@ -117,27 +128,42 @@ const GestionStock: React.FC = () => {
 
   const handleDialogChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    const updatedValue = ["quantite", "ppv", "ph"].includes(name)
-      ? Number(value)
-      : value;
+    const updatedValue = ["quantite", "ppv", "ph"].includes(name) ? Number(value) : value;
     setDialogState((prev) => ({ ...prev, [name]: updatedValue }));
   };
 
   const handleSave = async () => {
     if (!selectedMedicine) return;
+
+    const payload = {
+       ID: selectedMedicine.id,
+  CODE: dialogState.code,
+  Nom_medicament: dialogState.nom_medicament,
+  FORME: dialogState.forme,
+  PRESENTATION: dialogState.presentation,
+  PPV: dialogState.ppv,
+  PH: dialogState.ph,
+ quantite: dialogState.quantite, // use exact name with accent
+  DATE_PER: dialogState.datE_PER,   // match case
+  categorie: dialogState.categorie
+    };
+
+      console.log("Sending payload to backend:", JSON.stringify(payload, null, 2));
+
     try {
-      await axios.put(
-        `http://localhost:7194/api/medicines/${selectedMedicine.id}`,
-        dialogState
-      );
+      await axios.put(`http://localhost:7194/api/medicines/${selectedMedicine.id}`, payload);
+
       setMedicines((prev) =>
-        prev.map((m) =>
-          m.id === selectedMedicine.id ? { ...m, ...dialogState } : m
-        )
+        prev.map((m) => (m.id === selectedMedicine.id ? { ...m, ...dialogState } : m))
       );
       setLastEditedId(selectedMedicine.id);
       localStorage.setItem("lastEditedId", selectedMedicine.id.toString());
       setOpen(false);
+
+      // Add new category if it doesn't exist
+      if (dialogState.categorie && !categories.includes(dialogState.categorie)) {
+        setCategories((prev) => [...prev, dialogState.categorie as string]);
+      }
     } catch (error) {
       console.error("Error updating medicine:", error);
     }
@@ -156,7 +182,6 @@ const GestionStock: React.FC = () => {
     }
   };
 
-  // 🔹 Handle duplication
   const handleDuplicate = (medicine: Medicine) => {
     setSelectedMedicine(medicine);
     setNewExpiryDate("");
@@ -169,14 +194,11 @@ const GestionStock: React.FC = () => {
     try {
       const newMedicine = {
         ...selectedMedicine,
-        id: undefined, // Laisse le backend générer un nouvel ID
-        datE_PER: newExpiryDate,
+        id: undefined,
+        datE_PER: newExpiryDate, // MMYYYY
       };
 
-      const res = await axios.post(
-        "http://localhost:7194/api/medicines",
-        newMedicine
-      );
+      const res = await axios.post("http://localhost:7194/api/medicines", newMedicine);
       setMedicines((prev) => [...prev, res.data]);
       setLastEditedId(res.data.id);
       localStorage.setItem("lastEditedId", res.data.id.toString());
@@ -189,17 +211,10 @@ const GestionStock: React.FC = () => {
   return (
     <Box className="bg-gradient-to-br from-emerald-50 to-emerald-100" p={3}>
       <Header titre="Gestion Stocks" />
-      <Typography variant="h4" mb={3} fontWeight="bold">
-        Gestion du Stock
-      </Typography>
+      <Typography variant="h4" mb={3} fontWeight="bold">Gestion du Stock</Typography>
 
       {/* Toolbar + Stats */}
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={2}
-        mb={3}
-        alignItems="center"
-      >
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={2} mb={3} alignItems="center">
         <TextField
           label="Recherche par nom"
           value={search}
@@ -215,23 +230,12 @@ const GestionStock: React.FC = () => {
           sx={{ minWidth: 200 }}
         >
           <option value="">Toutes</option>
-          <option value="Suspension / Sirop">Suspension / Sirop</option>
-          <option value="Crème / Gel / Pommade">Crème / Gel / Pommade</option>
-          <option value="Comprimé">Comprimé</option>
-          <option value="Gélule">Gélule</option>
-          <option value="Collyre">Collyre</option>
-          <option value="Autre">Autre</option>
+          {categories.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
         </TextField>
-        <Chip
-          label={`Produits en stock: ${productsInStock}`}
-          color="success"
-          variant="outlined"
-        />
-        <Chip
-          label={`Valeur totale: ${totalStockValue.toLocaleString()} MAD`}
-          color="primary"
-          variant="outlined"
-        />
+        <Chip label={`Produits en stock: ${productsInStock}`} color="success" variant="outlined" />
+        <Chip label={`Valeur totale: ${totalStockValue.toLocaleString()} MAD`} color="primary" variant="outlined" />
       </Stack>
 
       {/* Table */}
@@ -239,35 +243,17 @@ const GestionStock: React.FC = () => {
         <Table stickyHeader>
           <TableHead>
             <TableRow>
-              {[
-                "ID",
-                "Code",
-                "Nom",
-                "Forme",
-                "Catégorie",
-                "Quantité",
-                "PPV",
-                "PH",
-                "Date Péremption",
-                "Actions",
-              ].map((head) => (
-                <TableCell key={head} sx={{ fontWeight: "bold", fontSize: 15 }}>
-                  {head}
-                </TableCell>
+              {["ID","Code","Nom","Forme","Catégorie","Quantité","PPV","PH","Date Péremption","Actions"].map((h) => (
+                <TableCell key={h} sx={{ fontWeight: "bold", fontSize: 15 }}>{h}</TableCell>
               ))}
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredMedicines.map((m) => (
-              <TableRow
-                key={m.id}
-                data-id={m.id}
-                sx={{
-                  backgroundColor:
-                    m.id === lastEditedId ? "#e0f7fa" : "inherit",
-                  "&:hover": { backgroundColor: "#f1f8e9" },
-                }}
-              >
+            {paginatedMedicines.map((m) => (
+              <TableRow key={m.id} data-id={m.id} sx={{
+                backgroundColor: m.id === lastEditedId ? "#e0f7fa" : "inherit",
+                "&:hover": { backgroundColor: "#f1f8e9" },
+              }}>
                 <TableCell>{m.id}</TableCell>
                 <TableCell>{m.code}</TableCell>
                 <TableCell sx={{ fontSize: 14 }}>{m.nom_medicament}</TableCell>
@@ -279,29 +265,9 @@ const GestionStock: React.FC = () => {
                 <TableCell>{m.datE_PER}</TableCell>
                 <TableCell>
                   <Stack direction="row" spacing={1}>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={() => handleEdit(m)}
-                    >
-                      Modifier
-                    </Button>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="warning"
-                      onClick={() => handleDuplicate(m)}
-                    >
-                      Dupliquer
-                    </Button>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="error"
-                      onClick={() => handleDelete(m.id)}
-                    >
-                      Supprimer
-                    </Button>
+                    <Button size="small" variant="outlined" onClick={() => handleEdit(m)}>Modifier</Button>
+                    <Button size="small" variant="outlined" color="warning" onClick={() => handleDuplicate(m)}>Dupliquer</Button>
+                    <Button size="small" variant="outlined" color="error" onClick={() => handleDelete(m.id)}>Supprimer</Button>
                   </Stack>
                 </TableCell>
               </TableRow>
@@ -310,57 +276,55 @@ const GestionStock: React.FC = () => {
         </Table>
       </TableContainer>
 
+      {/* Pagination */}
+      <Stack direction="row" spacing={2} mt={2} alignItems="center">
+        <Button disabled={page === 1} onClick={() => setPage((prev) => prev - 1)}>Précédent</Button>
+        <Typography>Page {page} / {totalPages}</Typography>
+        <Button disabled={page === totalPages} onClick={() => setPage((prev) => prev + 1)}>Suivant</Button>
+      </Stack>
+
       {/* Edit Dialog */}
-      <Dialog
-        open={open}
-        onClose={() => setOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
+      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Modifier le Médicament</DialogTitle>
         <DialogContent>
           <Stack spacing={2} mt={1}>
-            {[
-              "code",
-              "nom_medicament",
-              "forme",
-              "quantite",
-              "ppv",
-              "ph",
-              "datE_PER",
-            ].map((field) => (
-              <TextField
-                key={field}
-                label={field}
-                name={field}
-                type={
-                  ["quantite", "ppv", "ph"].includes(field) ? "number" : "text"
-                }
-                value={(dialogState as any)[field] ?? ""}
-                onChange={handleDialogChange}
-                fullWidth
-              />
+            {["code","nom_medicament","forme","quantite","ppv","ph","datE_PER","categorie"].map((field) => (
+              field === "categorie" ? (
+                <Autocomplete
+                  key={field}
+                  freeSolo
+                  options={categories}
+                  value={dialogState.categorie || ""}
+                  onChange={(e, val) => setDialogState((prev) => ({ ...prev, categorie: val || "" }))}
+                  onInputChange={(e, val) => setDialogState((prev) => ({ ...prev, categorie: val }))}
+                  renderInput={(params) => <TextField {...params} label="Catégorie" fullWidth />}
+                />
+              ) : (
+                <TextField
+                  key={field}
+                  label={field}
+                  name={field}
+                  type={["quantite","ppv","ph"].includes(field) ? "number" : "text"}
+                  value={(dialogState as any)[field] ?? ""}
+                  onChange={handleDialogChange}
+                  fullWidth
+                />
+              )
             ))}
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpen(false)}>Annuler</Button>
-          <Button onClick={handleSave} variant="contained" color="primary">
-            Enregistrer
-          </Button>
+          <Button onClick={handleSave} variant="contained" color="primary">Enregistrer</Button>
         </DialogActions>
       </Dialog>
 
       {/* Duplicate Dialog */}
-      <Dialog
-        open={duplicateDialogOpen}
-        onClose={() => setDuplicateDialogOpen(false)}
-      >
+      <Dialog open={duplicateDialogOpen} onClose={() => setDuplicateDialogOpen(false)}>
         <DialogTitle>Dupliquer le Médicament</DialogTitle>
         <DialogContent>
           <Typography>
-            Entrer la nouvelle date de péremption pour{" "}
-            <strong>{selectedMedicine?.nom_medicament}</strong>
+            Entrer la nouvelle date de péremption (MMYYYY) pour <strong>{selectedMedicine?.nom_medicament}</strong>
           </Typography>
           <TextField
             label="Nouvelle Date Péremption"
@@ -370,13 +334,12 @@ const GestionStock: React.FC = () => {
             InputLabelProps={{ shrink: true }}
             value={newExpiryDate}
             onChange={(e) => setNewExpiryDate(e.target.value)}
+            placeholder="MMYYYY"
           />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDuplicateDialogOpen(false)}>Annuler</Button>
-          <Button variant="contained" onClick={confirmDuplicate}>
-            Confirmer
-          </Button>
+          <Button variant="contained" onClick={confirmDuplicate}>Confirmer</Button>
         </DialogActions>
       </Dialog>
     </Box>
