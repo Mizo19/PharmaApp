@@ -163,142 +163,276 @@ const GestionCredit: React.FC = () => {
     }
   };
 
+  const headCellSx = {
+    fontWeight: 600,
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: "#64748b",
+    bgcolor: "#f8fafc",
+    borderBottom: "1px solid #e2e8f0",
+  } as const;
+
+  const bodyCellSx = {
+    fontSize: 13.5,
+    color: "#334155",
+    borderBottom: "1px solid #f1f5f9",
+  } as const;
+
   return (
-    <Box sx={{ padding: 4 }}>
+    <Box sx={{ minHeight: "100vh", bgcolor: "#f8fafc" }}>
       <Header titre="Gestion Crédit" />
-      <Typography variant="h4" gutterBottom>
-        Crédits Clients
-      </Typography>
+      <Box sx={{ maxWidth: 1600, mx: "auto", px: 3, pt: 4, pb: 5 }}>
+        <Typography
+          variant="h5"
+          sx={{ fontWeight: 600, color: "#0f172a", mb: 3, letterSpacing: "-0.01em" }}
+        >
+          Crédits Clients
+        </Typography>
 
-      {/* Tableau Crédits */}
-      <TableContainer component={Paper} sx={{ mt: 2 }}>
-        <Table>
-          <TableHead sx={{ backgroundColor: "#1976d2" }}>
-            <TableRow>
-              <TableCell sx={{ color: "white" }}>Client</TableCell>
-              <TableCell sx={{ color: "white"  ,display: 'none'  }}>Montant Total</TableCell>
-              <TableCell sx={{ color: "white" }}>Montant Restant</TableCell>
-              <TableCell sx={{ color: "white" }}>Date</TableCell>
-              <TableCell sx={{ color: "white" }}>Statut</TableCell>
-              <TableCell sx={{ color: "white" }}>Action</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {credits.map((credit) => (
-              <TableRow key={credit.id}>
-                <TableCell>{credit.clientName}</TableCell>
-                <TableCell sx={{ display: 'none' }} >{credit.montantTotal.toLocaleString()} MAD</TableCell>
-                <TableCell>{credit.montantRestant.toLocaleString()} MAD</TableCell>
-                <TableCell>{new Date(credit.dateCreation).toLocaleDateString()}</TableCell>
-                <TableCell>
-                  {credit.estPaye ? (
-                    <Typography color="green">Payé</Typography>
-                  ) : (
-                    <Typography color="orange">En cours</Typography>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {!credit.estPaye && (
-                    <Button variant="contained" color="primary" onClick={() => handleSelectCredit(credit)}>
-                      Gérer Paiement
-                    </Button>
-                  )}
-                </TableCell>
+        {/* Tableau Crédits */}
+        <TableContainer
+          component={Paper}
+          sx={{
+            border: "1px solid #e2e8f0",
+            borderRadius: 3,
+            boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+          }}
+        >
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell sx={headCellSx}>Client</TableCell>
+                <TableCell sx={{ ...headCellSx, display: "none" }}>Montant Total</TableCell>
+                <TableCell sx={headCellSx}>Montant Restant</TableCell>
+                <TableCell sx={headCellSx}>Date</TableCell>
+                <TableCell sx={headCellSx}>Statut</TableCell>
+                <TableCell sx={headCellSx} align="right">Action</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TableHead>
+            <TableBody>
+              {credits.map((credit) => (
+                <TableRow key={credit.id} sx={{ "&:hover": { bgcolor: "#f8fafc" } }}>
+                  <TableCell sx={{ ...bodyCellSx, color: "#0f172a", fontWeight: 500 }}>
+                    {credit.clientName}
+                  </TableCell>
+                  <TableCell sx={{ ...bodyCellSx, display: "none" }}>
+                    {credit.montantTotal.toLocaleString()} MAD
+                  </TableCell>
+                  <TableCell sx={{ ...bodyCellSx, fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
+                    {credit.montantRestant.toLocaleString()} MAD
+                  </TableCell>
+                  <TableCell sx={bodyCellSx}>
+                    {new Date(credit.dateCreation).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell sx={bodyCellSx}>
+                    {credit.estPaye ? (
+                      <Box
+                        component="span"
+                        sx={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          px: 1.25,
+                          py: 0.25,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          bgcolor: "#ecfdf5",
+                          color: "#047857",
+                          border: "1px solid #a7f3d0",
+                          borderRadius: 999,
+                        }}
+                      >
+                        Payé
+                      </Box>
+                    ) : (
+                      <Box
+                        component="span"
+                        sx={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          px: 1.25,
+                          py: 0.25,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          bgcolor: "#fffbeb",
+                          color: "#b45309",
+                          border: "1px solid #fde68a",
+                          borderRadius: 999,
+                        }}
+                      >
+                        En cours
+                      </Box>
+                    )}
+                  </TableCell>
+                  <TableCell sx={bodyCellSx} align="right">
+                    {!credit.estPaye && (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        onClick={() => handleSelectCredit(credit)}
+                        sx={{
+                          textTransform: "none",
+                          bgcolor: "#059669",
+                          borderRadius: 2,
+                          boxShadow: "none",
+                          "&:hover": { bgcolor: "#047857", boxShadow: "none" },
+                        }}
+                      >
+                        Gérer Paiement
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
 
-      {/* Détails du crédit sélectionné */}
-      {selectedCredit && (
-        <>
-          <Paper sx={{ p: 3, mt: 4 }}>
-            <Typography variant="h5" gutterBottom>
-              Paiement pour {selectedCredit.clientName}
-            </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-              <TextField
-                label="Montant à payer"
-                type="number"
-                value={montantPaiement}
-                onChange={(e) => setMontantPaiement(Number(e.target.value))}
-                inputProps={{
-                  min: 0,
-                  max: selectedCredit?.montantRestant ?? 0,
-                }}
-              />
-              <Button variant="contained" color="primary" onClick={() => handlePay(false)}>
-                Payer
-              </Button>
-              <Button variant="outlined" color="secondary" onClick={() => handlePay(true)}>
-                Payer Tout
-              </Button>
-            </Box>
+        {/* Détails du crédit sélectionné */}
+        {selectedCredit && (
+          <>
+            <Paper
+              sx={{
+                p: 3,
+                mt: 4,
+                border: "1px solid #e2e8f0",
+                borderRadius: 3,
+                boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+              }}
+            >
+              <Typography
+                variant="h6"
+                sx={{ fontWeight: 600, color: "#0f172a", mb: 2.5 }}
+              >
+                Paiement pour {selectedCredit.clientName}
+              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3, flexWrap: "wrap" }}>
+                <TextField
+                  size="small"
+                  label="Montant à payer"
+                  type="number"
+                  value={montantPaiement}
+                  onChange={(e) => setMontantPaiement(Number(e.target.value))}
+                  inputProps={{
+                    min: 0,
+                    max: selectedCredit?.montantRestant ?? 0,
+                  }}
+                />
+                <Button
+                  variant="contained"
+                  onClick={() => handlePay(false)}
+                  sx={{
+                    textTransform: "none",
+                    bgcolor: "#059669",
+                    borderRadius: 2,
+                    boxShadow: "none",
+                    "&:hover": { bgcolor: "#047857", boxShadow: "none" },
+                  }}
+                >
+                  Payer
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={() => handlePay(true)}
+                  sx={{
+                    textTransform: "none",
+                    borderRadius: 2,
+                    borderColor: "#cbd5e1",
+                    color: "#334155",
+                    "&:hover": { borderColor: "#94a3b8", bgcolor: "#f8fafc" },
+                  }}
+                >
+                  Payer Tout
+                </Button>
+              </Box>
 
-            <Typography variant="h6" gutterBottom>
-              Historique des paiements
+              <Typography
+                variant="subtitle2"
+                sx={{ fontWeight: 600, color: "#475569", mb: 1.5 }}
+              >
+                Historique des paiements
+              </Typography>
+              <TableContainer sx={{ border: "1px solid #e2e8f0", borderRadius: 2 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={headCellSx}>Montant</TableCell>
+                      <TableCell sx={headCellSx}>Date Paiement</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {paiements.length > 0 ? (
+                      paiements.map((p) => (
+                        <TableRow key={p.id}>
+                          <TableCell sx={{ ...bodyCellSx, fontVariantNumeric: "tabular-nums" }}>
+                            {p.montant.toLocaleString()} MAD
+                          </TableCell>
+                          <TableCell sx={bodyCellSx}>
+                            {new Date(p.datePaiement).toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={2} align="center" sx={{ ...bodyCellSx, color: "#94a3b8", py: 3 }}>
+                          Aucun paiement pour ce crédit.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+
+            {/* Tableau des ventes / médicaments */}
+            <Typography
+              variant="subtitle1"
+              sx={{ fontWeight: 600, color: "#0f172a", mt: 4, mb: 1.5 }}
+            >
+              Médicaments achetés par {selectedCredit.clientName}
             </Typography>
-            <TableContainer>
+            <TableContainer
+              component={Paper}
+              sx={{
+                border: "1px solid #e2e8f0",
+                borderRadius: 3,
+                boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+              }}
+            >
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Montant</TableCell>
-                    <TableCell>Date Paiement</TableCell>
+                    <TableCell sx={headCellSx}>Date</TableCell>
+                    <TableCell sx={headCellSx}>Médicament</TableCell>
+                    <TableCell sx={headCellSx}>Quantité</TableCell>
+                    <TableCell sx={headCellSx}>Prix Total</TableCell>
+                    <TableCell sx={headCellSx}>Type de Vente</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {paiements.length > 0 ? (
-                    paiements.map((p) => (
-                      <TableRow key={p.id}>
-                        <TableCell>{p.montant.toLocaleString()} MAD</TableCell>
-                        <TableCell>{new Date(p.datePaiement).toLocaleString()}</TableCell>
+                  {sales
+                    .filter((s) => s.nomClient === selectedCredit.clientName)
+                    .map((s) => (
+                      <TableRow key={s.salesID} sx={{ "&:hover": { bgcolor: "#f8fafc" } }}>
+                        <TableCell sx={bodyCellSx}>{new Date(s.date).toLocaleString()}</TableCell>
+                        <TableCell sx={{ ...bodyCellSx, color: "#0f172a", fontWeight: 500 }}>
+                          {s.medicines}
+                        </TableCell>
+                        <TableCell sx={{ ...bodyCellSx, fontVariantNumeric: "tabular-nums" }}>
+                          {s.totalArticles}
+                        </TableCell>
+                        <TableCell sx={{ ...bodyCellSx, fontVariantNumeric: "tabular-nums" }}>
+                          {s.totalPrice.toFixed(2)} MAD
+                        </TableCell>
+                        <TableCell sx={bodyCellSx}>{s.typeDeVente}</TableCell>
                       </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={2} align="center">
-                        Aucun paiement pour ce crédit.
-                      </TableCell>
-                    </TableRow>
-                  )}
+                    ))}
                 </TableBody>
               </Table>
             </TableContainer>
-          </Paper>
-
-          {/* Tableau des ventes / médicaments */}
-          <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
-            Médicaments achetés par {selectedCredit.clientName}
-          </Typography>
-          <TableContainer component={Paper}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Date</TableCell>
-                  <TableCell>Médicament</TableCell>
-                  <TableCell>Quantité</TableCell>
-                  <TableCell>Prix Total</TableCell>
-                  <TableCell>Type de Vente</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {sales
-                  .filter((s) => s.nomClient === selectedCredit.clientName)
-                  .map((s) => (
-                    <TableRow key={s.salesID}>
-                      <TableCell>{new Date(s.date).toLocaleString()}</TableCell>
-                      <TableCell>{s.medicines}</TableCell>
-                      <TableCell>{s.totalArticles}</TableCell>
-                      <TableCell>{s.totalPrice.toFixed(2)} MAD</TableCell>
-                      <TableCell>{s.typeDeVente}</TableCell>
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </>
-      )}
+          </>
+        )}
+      </Box>
     </Box>
   );
 };

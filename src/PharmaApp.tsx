@@ -1,4 +1,4 @@
-import { useEffect,useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import "bootstrap/dist/css/bootstrap.min.css";
 import Header from "./header";
@@ -9,7 +9,7 @@ import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
 import { useNavigate } from "react-router-dom";
 
-import { Box, Button, Stack, TextField } from "@mui/material";
+import { Box, Stack, TextField } from "@mui/material";
 import {
   Table,
   TableBody,
@@ -77,7 +77,9 @@ export default function App() {
   });
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [codeInput, setCodeInput] = useState("");
-  const [utilisateur, setUtilisateur] = useState(" Rabab");
+  const [utilisateur, setUtilisateur] = useState(
+    () => (localStorage.getItem("connectedUser") || "Rabab").replace(/^"|"$/g, "").trim()
+  );
   const [isClientModalOpen, setClientModalOpen] = useState(false);
   const [_selectedClient, setSelectedClient] = useState("Aucun");
 
@@ -119,6 +121,46 @@ useEffect(() => {
       })
       .catch((err) => console.error("Fetch error:", err));
   }, []);
+
+  // 🔔 Alert pharmacist when price updates are pending (scraped vs DB)
+  useEffect(() => {
+    if (sessionStorage.getItem("priceAlertShown")) return;
+    axios
+      .get("http://localhost:7194/api/pricing/diff")
+      .then(async (res) => {
+        const s = res.data?.summary;
+        if (!s) return;
+        const changed = Number(s.changed || 0);
+        const news = Number(s.new || 0);
+        if (changed === 0 && news === 0) return;
+
+        sessionStorage.setItem("priceAlertShown", "1");
+
+        const result = await Swal.fire({
+          title: "Mise à jour des prix disponible",
+          html: `
+            <div style="text-align:left; font-size:14px; line-height:1.6">
+              Les données de <b>medicament.ma</b> contiennent :
+              <ul style="margin:10px 0 0 20px; padding:0">
+                <li><b style="color:#059669">${changed.toLocaleString()}</b> changement(s) de prix</li>
+                <li><b style="color:#2563eb">${news.toLocaleString()}</b> nouveau(x) médicament(s)</li>
+              </ul>
+            </div>
+          `,
+          icon: "info",
+          showCancelButton: true,
+          confirmButtonText: "Voir maintenant",
+          cancelButtonText: "Plus tard",
+          confirmButtonColor: "#059669",
+          cancelButtonColor: "#64748b",
+          reverseButtons: true,
+        });
+        if (result.isConfirmed) navigate("/MiseAJourPrix");
+      })
+      .catch(() => {
+        /* diff file not ready yet — silently ignore */
+      });
+  }, [navigate]);
   const updateDiscount = (nomMedicament: string, newDiscount: number) => {
     setCart((prevCart) =>
       prevCart.map((item) =>
@@ -314,16 +356,23 @@ useEffect(() => {
       return;
     }
 
-    if (e.key.length === 1) {
-      barcodeBuffer.current += e.key;
-      if (scanTimeout.current) {
-        window.clearTimeout(scanTimeout.current);
-      }
-      scanTimeout.current = window.setTimeout(() => {
-        scanTimeout.current = null;
-        processBarcodeBuffer();
-      }, PROCESS_DEBOUNCE_MS);
+  };
+
+  const handleBarcodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setBarcodeText(value);
+    barcodeBuffer.current = value;
+    if (scanTimeout.current) {
+      window.clearTimeout(scanTimeout.current);
     }
+    if (!value) {
+      scanTimeout.current = null;
+      return;
+    }
+    scanTimeout.current = window.setTimeout(() => {
+      scanTimeout.current = null;
+      processBarcodeBuffer();
+    }, PROCESS_DEBOUNCE_MS);
   };
 
   const handleBarcodePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
@@ -362,6 +411,66 @@ useEffect(() => {
     0
   );
   const totalarticle = cart.reduce((sum, c) => sum + c.quantite, 0);
+
+  // 🔹 KPIs for the home widgets
+  const greeting = useMemo(() => {
+    const h = new Date().getHours();
+    if (h < 12) return "Bonjour";
+    if (h < 18) return "Bon après-midi";
+    return "Bonsoir";
+  }, []);
+
+  const todayLabel = useMemo(
+    () =>
+      new Date().toLocaleDateString("fr-FR", {
+        weekday: "long",
+        day: "2-digit",
+        month: "long",
+      }),
+    []
+  );
+
+  const initials = useMemo(() => {
+    const n = (utilisateur || "?").trim();
+    if (!n) return "?";
+    const w = n.split(/\s+/);
+    return (w.length === 1 ? w[0][0] : w[0][0] + w[w.length - 1][0]).toUpperCase();
+  }, [utilisateur]);
+
+  const visibleProducts = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+    if (!q) return [];
+    const out: Medicine[] = [];
+    for (let i = 0; i < products.length && out.length < 200; i++) {
+      const name = products[i].nom_medicament;
+      if (name && name.toLowerCase().includes(q)) out.push(products[i]);
+    }
+    return out;
+  }, [products, searchText]);
+
+  const stockStats = useMemo(() => {
+    let enStock = 0;
+    let lowStock = 0;
+    let expSoon = 0;
+    const now = new Date();
+    const curYM = now.getFullYear() * 12 + now.getMonth();
+    for (const p of products) {
+      const q = p.quantite ?? 0;
+      if (q > 0) enStock += 1;
+      if (q > 0 && q <= 5) lowStock += 1;
+      const d = p.datE_PER?.toString().trim();
+      if (d && /^\d{5,6}$/.test(d)) {
+        const year = parseInt(d.slice(-4), 10);
+        const month = parseInt(d.slice(0, -4), 10);
+        if (month >= 1 && month <= 12) {
+          const ym = year * 12 + (month - 1);
+          const diff = ym - curYM;
+          if (q > 0 && diff <= 3) expSoon += 1;
+        }
+      }
+    }
+    return { enStock, lowStock, expSoon };
+  }, [products]);
 
   const confirmSale = () => setShowCodeModal(false);
 
@@ -487,7 +596,7 @@ const handleCreditUpdate = async (client: string, montant: number) => {
       const newCredit = {
         clientName: client,
         montantTotal: montant,
-        montantRestant: 0,
+        montantRestant: montant,
         dateCreation: new Date().toISOString(),
         estPaye: false,
       };
@@ -506,299 +615,376 @@ const handleCreditUpdate = async (client: string, montant: number) => {
 
 
   return (
-    <div className="h-screen bg-gray-100 p-4 bg-gradient-to-br from-emerald-50 to-emerald-100">
+    <div className="min-h-screen bg-slate-50">
       <Header titre="Gestion de Ventes" />
 
-      {/* Inputs */}
-      <div className="p-4 flex items-center gap-3">
-          <button
-          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg font-semibold shadow-md"
-          
-          onClick={handleAjoutProduit}
-        >
-          + Ajouter Produit
-        </button>
-   
-
-        <input
-          ref={barcodeInputRef}
-          value={barcodeText}
-          placeholder="🔍 Code (scan here) F4"
-          onKeyDown={handleBarcodeKeyDown}
-          onPaste={handleBarcodePaste}
-          readOnly={false}
-          onChange={() => {}}
-          className="flex-1 p-3 w-1/4 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-        />
-
-          <input
-          ref={searchInputRef}
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          onKeyDown={handleSearchKeyDown}
-          placeholder="🔍 Nom, Forme, PPV (Enter to add) F2"
-          className="flex-1 p-3 w-1/4 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-        />
-
-       
-      </div>
-
-      {/* Layout */}
-      <div className="flex gap-6">
-        <div className="w-2/3 max-h-[350px] overflow-auto rounded-lg">
-          <span className="fw-bold">
-            <Table
-              hoverable
-              className="rounded-lg overflow-hidden shadow-md border border-gray-200"
-            >
-              <TableHead className="bg-green-400">
-                <TableRow>
-                  <TableHeadCell className="text-gray-800 font-semibold px-4 py-2 rounded-tl-lg hidden">
-                    ID
-                  </TableHeadCell>
-                  <TableHeadCell className="text-gray-800 font-semibold px-4 py-2 rounded-tl-lg">
-                    CODE
-                  </TableHeadCell>
-                  <TableHeadCell className="text-gray-800 font-semibold px-4 py-2">
-                    Désignation
-                  </TableHeadCell>
-                  <TableHeadCell className="text-gray-800 font-semibold px-4 py-2">
-                    Forme
-                  </TableHeadCell>
-                  <TableHeadCell className="text-gray-800 font-semibold px-4 py-2">
-                    PPV
-                  </TableHeadCell>
-                  <TableHeadCell className="text-gray-800 font-semibold px-4 py-2">
-                    Présentation
-                  </TableHeadCell>
-
-                  <TableHeadCell className="text-gray-800 font-semibold px-4 py-2">
-                    Qauntité
-                  </TableHeadCell>
-                  <TableHeadCell className="text-gray-800 font-semibold px-4 py-2">
-                    Date Peremption
-                  </TableHeadCell>
-                  <TableHeadCell className="px-4 py-2 rounded-tr-lg"></TableHeadCell>
-                </TableRow>
-              </TableHead>
-
-              <TableBody className="divide-y bg-gradient-to-b from-blue-50 to-blue-100">
-                {products
-                  .filter((m) =>
-                    m.nom_medicament
-                      .toLowerCase()
-                      .includes(searchText.toLowerCase())
-                  )
-                  .map((m, i) => (
-                    <TableRow
-                      key={i}
-                      className="hover:bg-blue-400 transition-colors"
-                    >
-                      <TableCell className="text-gray-900 font-semibold px-4 py-2 hidden">
-                        {m.id}
-                      </TableCell>
-                      <TableCell className="text-gray-900 font-semibold px-4 py-2">
-                        {m.code}
-                      </TableCell>
-                      <TableCell className="text-gray-800 px-4 py-2">
-                        {m.nom_medicament}
-                      </TableCell>
-                      <TableCell className="text-gray-700 px-4 py-2">
-                        {m.forme}
-                      </TableCell>
-                      <TableCell className="text-gray-900 font-bold px-4 py-2">
-                        {m.ppv} DH
-                      </TableCell>
-                      <TableCell className="text-gray-700 px-4 py-2">
-                        {m.presentation}
-                      </TableCell>
-                      <TableCell className="text-gray-700 px-4 py-2">
-                        {m.quantite}
-                      </TableCell>
-                      <TableCell className="text-gray-700 px-4 py-2">
-                        {m.datE_PER}
-                      </TableCell>
-
-                      <TableCell className="px-4 py-2">
-                        <button
-                          className="bg-green-500 hover:bg-green-600 text-white font-bold px-3 py-1 rounded shadow-md transition"
-                          onClick={() => addToCart(m, String(m.code))}
-                        >
-                          +
-                        </button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
-          </span>
-           
-        </div>
-
-        <div className="backdrop-blur-lg bg-white/30 rounded-2xl shadow-xl p-5 border border-white/50">
-          <div className="flex items-center gap-6">
-            <div className="flex-1">
-              <p className="text-sm text-gray-600 font-medium mb-1">
-                Total Articles
-              </p>
-              <p className="text-4xl font-bold text-gray-900">{totalarticle}</p>
+      {/* Widgets: greeting + KPIs */}
+      <div className="max-w-[1600px] mx-auto px-6 pt-5">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          {/* Greeting card */}
+          <div className="md:col-span-1 relative overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-600 to-emerald-700 text-white p-4 shadow-sm">
+            <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full" />
+            <div className="absolute -right-10 -top-10 w-20 h-20 bg-white/5 rounded-full" />
+            <div className="relative flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-white text-emerald-700 flex items-center justify-center text-lg font-bold ring-2 ring-white/40 shadow-md shrink-0">
+                {initials}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-wider text-emerald-100/90 font-medium">
+                  {greeting}
+                </p>
+                <p className="text-base font-semibold truncate">
+                  {(utilisateur || "").trim() || "Utilisateur"}
+                </p>
+                <p className="text-[11px] text-emerald-100/80 capitalize">{todayLabel}</p>
+              </div>
             </div>
-            <div className="w-1 h-16 bg-gradient-to-b from-blue-400 to-purple-500 rounded-full"></div>
-            <div className="flex-1">
-              <p className="text-sm text-gray-600 font-medium mb-1">Total</p>
-              <p className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                {total.toLocaleString()}
+          </div>
+
+          {/* En stock */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg shrink-0">
+              📦
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+                Produits en stock
               </p>
-              <p className="text-sm text-gray-500 font-semibold">MAD</p>
+              <p className="text-2xl font-semibold text-slate-900 tabular-nums">
+                {stockStats.enStock.toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          {/* Stock faible */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-lg shrink-0">
+              ⚠️
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+                Stock faible (≤5)
+              </p>
+              <p className="text-2xl font-semibold text-amber-600 tabular-nums">
+                {stockStats.lowStock.toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          {/* Péremption proche */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center text-lg shrink-0">
+              ⏳
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+                Périment ≤ 3 mois
+              </p>
+              <p className="text-2xl font-semibold text-rose-600 tabular-nums">
+                {stockStats.expSoon.toLocaleString()}
+              </p>
             </div>
           </div>
         </div>
       </div>
-      <h2 className="mb-2 font-bold text-lg">🛒 Tableau de Vente</h2>
 
-      <div className="flex w-3/2 gap-4">
-        {/* Table Section */}
-        <div className="flex-1 max-h-[300px] overflow-auto rounded-lg">
-          <Table hoverable>
-            <TableHead>
+      {/* Inputs */}
+      <div className="max-w-[1600px] mx-auto px-6 pt-5 pb-3 flex items-center gap-3">
+        <button
+          className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium shadow-sm transition-colors"
+          onClick={handleAjoutProduit}
+        >
+          + Ajouter Produit
+        </button>
+
+        <input
+          ref={barcodeInputRef}
+          value={barcodeText}
+          placeholder="Code-barres (F4)"
+          onKeyDown={handleBarcodeKeyDown}
+          onPaste={handleBarcodePaste}
+          onChange={handleBarcodeChange}
+          className="flex-1 px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+        />
+
+        <input
+          ref={searchInputRef}
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          onKeyDown={handleSearchKeyDown}
+          placeholder="Rechercher nom, forme, PPV (F2)"
+          className="flex-1 px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+        />
+      </div>
+
+      {/* Layout */}
+      <div className="max-w-[1600px] mx-auto px-6 flex gap-6">
+        <div className="w-2/3 max-h-[350px] overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+          <Table hoverable className="rounded-xl overflow-hidden">
+            <TableHead className="bg-slate-50">
               <TableRow>
-                <TableHeadCell className="hidden">ID</TableHeadCell>
-                <TableHeadCell>Désignation</TableHeadCell>
-                <TableHeadCell>Quantité</TableHeadCell>
-                <TableHeadCell>Prix</TableHeadCell>
-                <TableHeadCell>Réduction (%)</TableHeadCell>
-                <TableHeadCell>Total</TableHeadCell>
-                <TableHeadCell>Action</TableHeadCell>
+                <TableHeadCell className="text-slate-600 text-[11px] font-semibold uppercase tracking-wider px-4 py-3 hidden">
+                  ID
+                </TableHeadCell>
+                <TableHeadCell className="text-slate-600 text-[11px] font-semibold uppercase tracking-wider px-4 py-3">
+                  Code
+                </TableHeadCell>
+                <TableHeadCell className="text-slate-600 text-[11px] font-semibold uppercase tracking-wider px-4 py-3">
+                  Désignation
+                </TableHeadCell>
+                <TableHeadCell className="text-slate-600 text-[11px] font-semibold uppercase tracking-wider px-4 py-3">
+                  Forme
+                </TableHeadCell>
+                <TableHeadCell className="text-slate-600 text-[11px] font-semibold uppercase tracking-wider px-4 py-3">
+                  PPV
+                </TableHeadCell>
+                <TableHeadCell className="text-slate-600 text-[11px] font-semibold uppercase tracking-wider px-4 py-3">
+                  Présentation
+                </TableHeadCell>
+                <TableHeadCell className="text-slate-600 text-[11px] font-semibold uppercase tracking-wider px-4 py-3">
+                  Qté
+                </TableHeadCell>
+                <TableHeadCell className="text-slate-600 text-[11px] font-semibold uppercase tracking-wider px-4 py-3">
+                  Péremption
+                </TableHeadCell>
+                <TableHeadCell className="px-4 py-3"></TableHeadCell>
               </TableRow>
             </TableHead>
 
-            <TableBody className="divide-y">
-              {cart.map((c, i) => (
-                <TableRow key={i} className="bg-white hover:bg-gray-50">
-                  <TableCell className="hidden">{c.id}</TableCell>
-                  <TableCell>{c.nom_medicament}</TableCell>
-                  <TableCell>{c.quantite}</TableCell>
-                  <TableCell>{c.ppv.toFixed(2)} DH</TableCell>
-
-                  {/* Réduction */}
-                  <TableCell>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={c.reduction || 0}
-                      onChange={(e) =>
-                        updateDiscount(
-                          c.nom_medicament,
-                          parseFloat(e.target.value)
-                        )
-                      }
-                      className="w-16 border border-gray-300 rounded text-center text-sm py-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    />
-                  </TableCell>
-
-                  {/* Total après réduction */}
-                  <TableCell>
-                    {(
-                      c.ppv *
-                      c.quantite *
-                      (1 - (c.reduction || 0) / 100)
-                    ).toFixed(2)}{" "}
-                    DH
-                  </TableCell>
-
-                  {/* Actions */}
-                  <TableCell>
-                    <div className="flex space-x-2">
+            <TableBody className="divide-y divide-slate-100 bg-white">
+              {visibleProducts.map((m) => (
+                  <TableRow
+                    key={m.id}
+                    className="hover:bg-slate-50 transition-colors"
+                  >
+                    <TableCell className="text-slate-900 font-medium px-4 py-2.5 hidden">
+                      {m.id}
+                    </TableCell>
+                    <TableCell className="text-slate-700 text-sm font-mono px-4 py-2.5">
+                      {m.code}
+                    </TableCell>
+                    <TableCell className="text-slate-900 text-sm font-medium px-4 py-2.5">
+                      {m.nom_medicament}
+                    </TableCell>
+                    <TableCell className="text-slate-600 text-sm px-4 py-2.5">
+                      {m.forme}
+                    </TableCell>
+                    <TableCell className="text-slate-900 text-sm font-semibold px-4 py-2.5 tabular-nums">
+                      {m.ppv} DH
+                    </TableCell>
+                    <TableCell className="text-slate-600 text-sm px-4 py-2.5">
+                      {m.presentation}
+                    </TableCell>
+                    <TableCell className="text-slate-600 text-sm px-4 py-2.5 tabular-nums">
+                      {m.quantite}
+                    </TableCell>
+                    <TableCell className="text-slate-600 text-sm px-4 py-2.5">
+                      {m.datE_PER}
+                    </TableCell>
+                    <TableCell className="px-4 py-2.5">
                       <button
-                        className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded shadow-sm transition"
-                        onClick={() => removeFromCart(c.nom_medicament)}
-                      >
-                        🗑 Sup
-                      </button>
-                      <button
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded shadow-sm transition"
-                        onClick={() => adjustQuantity(c.nom_medicament, +1)}
+                        className="w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white font-semibold transition-colors flex items-center justify-center"
+                        onClick={() => addToCart(m, String(m.code))}
                       >
                         +
                       </button>
-                      <button
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded shadow-sm transition"
-                        onClick={() => adjustQuantity(c.nom_medicament, -1)}
-                      >
-                        -
-                      </button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
         </div>
 
-        {/* Buttons Section */}
-        <div className="flex flex-col gap-3">
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 3 }}>
-            {/* Inputs */}
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-              <TextField label="Nom du patient" size="small"     value={patientName} 
-        onChange={handleChange}   fullWidth />
-              <TextField label="Code / Barcode" size="small" fullWidth />
-            </Stack>
+        <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <div className="flex items-center gap-6">
+            <div className="flex-1">
+              <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider mb-2">
+                Total Articles
+              </p>
+              <p className="text-4xl font-semibold text-slate-900 tabular-nums">
+                {totalarticle}
+              </p>
+            </div>
+            <div className="w-px h-16 bg-slate-200" />
+            <div className="flex-1">
+              <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider mb-2">
+                Total
+              </p>
+              <p className="text-4xl font-semibold text-emerald-600 tabular-nums">
+                {total.toLocaleString()}
+              </p>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">MAD</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
-            {/* Buttons */}
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-              <Button
-                variant="contained"
-                color="success"
-                onClick={() => handleVente("Especes", "Aucun")}
-                ref={venteEspecesRef}
-              >
-                ✅ Vente Espèces F3
-              </Button>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={() => setClientModalOpen(true)}
-              >
-                Vente Crédit
-              </Button>
-              <Button
-                variant="contained"
-                color="secondary"
-                onClick={() => handleVente("TPE", "Aucun")}
-              >
-                Vente TPE
-              </Button>
-              
-              <button
-                onClick={() => setShowAvoirModal(true)}
-                className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
-              >
-                Traiter Avoir
-              </button>
-            </Stack>
+      <div className="max-w-[1600px] mx-auto px-6 pt-6">
+        <h2 className="mb-3 font-semibold text-[15px] text-slate-900 flex items-center gap-2">
+          <span className="w-1 h-4 bg-emerald-500 rounded-full" />
+          Tableau de Vente
+        </h2>
 
-            {/* Summary */}
-            <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-600">
-              <div className="flex items-center justify-between text-gray-800">
-                <span className="text-lg">
-                  <span className="font-semibold">{totalarticle}</span> Articles
+        <div className="flex gap-6">
+          {/* Table Section */}
+          <div className="flex-1 max-h-[300px] overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+            <Table hoverable>
+              <TableHead className="bg-slate-50">
+                <TableRow>
+                  <TableHeadCell className="hidden">ID</TableHeadCell>
+                  <TableHeadCell className="text-slate-600 text-[11px] font-semibold uppercase tracking-wider">
+                    Désignation
+                  </TableHeadCell>
+                  <TableHeadCell className="text-slate-600 text-[11px] font-semibold uppercase tracking-wider">
+                    Quantité
+                  </TableHeadCell>
+                  <TableHeadCell className="text-slate-600 text-[11px] font-semibold uppercase tracking-wider">
+                    Prix
+                  </TableHeadCell>
+                  <TableHeadCell className="text-slate-600 text-[11px] font-semibold uppercase tracking-wider">
+                    Réduction
+                  </TableHeadCell>
+                  <TableHeadCell className="text-slate-600 text-[11px] font-semibold uppercase tracking-wider">
+                    Total
+                  </TableHeadCell>
+                  <TableHeadCell className="text-slate-600 text-[11px] font-semibold uppercase tracking-wider">
+                    Action
+                  </TableHeadCell>
+                </TableRow>
+              </TableHead>
+
+              <TableBody className="divide-y divide-slate-100">
+                {cart.map((c, i) => (
+                  <TableRow key={i} className="bg-white hover:bg-slate-50 transition-colors">
+                    <TableCell className="hidden">{c.id}</TableCell>
+                    <TableCell className="text-slate-900 text-sm font-medium">
+                      {c.nom_medicament}
+                    </TableCell>
+                    <TableCell className="text-slate-700 text-sm tabular-nums">
+                      {c.quantite}
+                    </TableCell>
+                    <TableCell className="text-slate-700 text-sm tabular-nums">
+                      {c.ppv.toFixed(2)} DH
+                    </TableCell>
+
+                    <TableCell>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={c.reduction || 0}
+                        onChange={(e) =>
+                          updateDiscount(
+                            c.nom_medicament,
+                            parseFloat(e.target.value)
+                          )
+                        }
+                        className="w-16 border border-slate-200 rounded-md text-center text-sm py-1 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                      />
+                    </TableCell>
+
+                    <TableCell className="text-slate-900 text-sm font-semibold tabular-nums">
+                      {(
+                        c.ppv *
+                        c.quantite *
+                        (1 - (c.reduction || 0) / 100)
+                      ).toFixed(2)}{" "}
+                      DH
+                    </TableCell>
+
+                    <TableCell>
+                      <div className="flex gap-1.5">
+                        <button
+                          className="w-8 h-8 rounded-md bg-red-50 hover:bg-red-600 text-red-600 hover:text-white text-sm transition-colors flex items-center justify-center"
+                          onClick={() => removeFromCart(c.nom_medicament)}
+                          title="Supprimer"
+                        >
+                          ×
+                        </button>
+                        <button
+                          className="w-8 h-8 rounded-md bg-slate-100 hover:bg-slate-700 text-slate-700 hover:text-white text-sm font-semibold transition-colors flex items-center justify-center"
+                          onClick={() => adjustQuantity(c.nom_medicament, +1)}
+                        >
+                          +
+                        </button>
+                        <button
+                          className="w-8 h-8 rounded-md bg-slate-100 hover:bg-slate-700 text-slate-700 hover:text-white text-sm font-semibold transition-colors flex items-center justify-center"
+                          onClick={() => adjustQuantity(c.nom_medicament, -1)}
+                        >
+                          −
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Buttons Section */}
+          <div className="w-[380px] flex flex-col gap-3">
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                <TextField
+                  label="Nom du patient"
+                  size="small"
+                  value={patientName}
+                  onChange={handleChange}
+                  fullWidth
+                />
+                <TextField label="Code / Barcode" size="small" fullWidth />
+              </Stack>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleVente("Especes", "Aucun")}
+                  ref={venteEspecesRef}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium shadow-sm transition-colors"
+                >
+                  Vente Espèces (F3)
+                </button>
+                <button
+                  onClick={() => setClientModalOpen(true)}
+                  className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2.5 rounded-lg text-sm font-medium shadow-sm transition-colors"
+                >
+                  Vente Crédit
+                </button>
+                <button
+                  onClick={() => handleVente("TPE", "Aucun")}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium shadow-sm transition-colors"
+                >
+                  Vente TPE
+                </button>
+                <button
+                  onClick={() => setShowAvoirModal(true)}
+                  className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium shadow-sm transition-colors"
+                >
+                  Traiter Avoir
+                </button>
+              </div>
+
+              {/* Summary */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between">
+                <span className="text-sm text-slate-600">
+                  <span className="font-semibold text-slate-900 tabular-nums">
+                    {totalarticle}
+                  </span>{" "}
+                  articles
                 </span>
-                <span className="text-2xl font-bold text-blue-600">
+                <span className="text-xl font-semibold text-emerald-600 tabular-nums">
                   {total.toLocaleString()} MAD
                 </span>
               </div>
-            </div>
-            {/* PDF */}
-            <FacturePDF
-              cart={cart}
-              total={total}
-              totalArticle={totalarticle}
-              patientName={patientName}
-              Pharmacien="Pharmacie El Abawain"
-            />
-          </Box>
+              {/* PDF */}
+              <FacturePDF
+                cart={cart}
+                total={total}
+                totalArticle={totalarticle}
+                patientName={patientName}
+                Pharmacien="Pharmacie El Abawain"
+              />
+            </Box>
+          </div>
         </div>
       </div>
       <ClientModal
@@ -811,41 +997,51 @@ const handleCreditUpdate = async (client: string, montant: number) => {
       />
       {/* Modal */}
 {showCodeModal && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div className="bg-white p-6 rounded-lg shadow-lg w-96">
-      <h2 className="text-lg font-bold mb-4 text-gray-800">
-        Entrez le code d’accès pour confirmer la vente
+  <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-md border border-slate-200">
+      <h2 className="text-base font-semibold mb-1 text-slate-900">
+        Code d'accès
       </h2>
+      <p className="text-sm text-slate-500 mb-5">
+        Entrez le code d'accès pour confirmer la vente
+      </p>
 
-      {/* Champ de code */}
       <input
-       ref={codeInputRef} // 👈 AJOUT ICI
+        ref={codeInputRef}
         type="password"
         value={codeInput}
         onChange={(e) => setCodeInput(e.target.value)}
-     onKeyDown={async (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    const btn = document.getElementById("validateButton");
-    if (btn) (btn as HTMLButtonElement).click();
-  }
-}}
-        className="border p-2 w-full mb-4 rounded focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
+        onKeyDown={async (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            const btn = document.getElementById("validateButton");
+            if (btn) (btn as HTMLButtonElement).click();
+          }
+        }}
+        className="w-full px-4 py-3 mb-5 bg-slate-50 border border-slate-200 rounded-lg text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
         placeholder="••••••••"
       />
 
-      {/* Boutons */}
-      <div className="flex justify-end space-x-2">
+      <div className="flex justify-end gap-2">
+        <button
+          className="px-4 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+          onClick={() => {
+            setShowCodeModal(false);
+            setCodeInput("");
+          }}
+        >
+          Annuler
+        </button>
         <button
           id="validateButton"
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
+          className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors shadow-sm"
           onClick={async () => {
             try {
               const res = await fetch("http://localhost:7194/api/utilisateurs");
               if (!res.ok) throw new Error("Erreur serveur");
               const data = await res.json();
 
-             const user = data.find((u: any) => u.motDePasse === codeInput.trim());
+              const user = data.find((u: any) => u.motDePasse === codeInput.trim());
 
               if (user) {
                 localStorage.setItem("connectedUser", user.nomUtilisateur);
@@ -864,16 +1060,6 @@ const handleCreditUpdate = async (client: string, montant: number) => {
           }}
         >
           Valider
-        </button>
-
-        <button
-          className="bg-gray-300 px-4 py-2 rounded hover:bg-gray-400 transition"
-          onClick={() => {
-            setShowCodeModal(false);
-            setCodeInput("");
-          }}
-        >
-          Annuler
         </button>
       </div>
     </div>

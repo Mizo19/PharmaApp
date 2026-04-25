@@ -25,23 +25,10 @@ export default function HistoriqueVentes() {
     quantiteRestante: number;
   };
 
-  type Medicine = {
-    id: number;
-    code: string;
-    nom_medicament: string;
-    quantite: number;
-    datE_PER: string; // MMYYYY
-    categorie: string;
-  };
-
   // -------------------- State --------------------
   const [salesData, setSalesData] = useState<Vente[]>([]);
-  const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
-
-  const [filterMonth, setFilterMonth] = useState<string>("");
-  const [filterYear, setFilterYear] = useState<string>("");
 
   const tableRef = useRef<HTMLDivElement>(null);
 
@@ -57,14 +44,6 @@ export default function HistoriqueVentes() {
         setSalesData(cleaned);
       })
       .catch((err) => console.error("Sales fetch error:", err));
-  }, []);
-
-  // -------------------- Fetch Medicines --------------------
-  useEffect(() => {
-    axios
-      .get("http://localhost:7194/api/medicines")
-      .then((res) => setMedicines(res.data))
-      .catch((err) => console.error("Medicines fetch error:", err));
   }, []);
 
   // -------------------- Filter Sales --------------------
@@ -100,34 +79,6 @@ export default function HistoriqueVentes() {
       .padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
   };
 
-  // -------------------- Medicines proches péremption filtré --------------------
-  const prochePeremptionFiltered = useMemo(() => {
-    const result: Medicine[] = [];
-    medicines.forEach((med) => {
-      if (!med.datE_PER) return;
-      const month = med.datE_PER.slice(0, 2);
-      const year = med.datE_PER.slice(2, 6);
-
-      if (filterMonth && month !== filterMonth) return;
-      if (filterYear && year !== filterYear) return;
-
-      if (med.quantite && med.quantite > 0) {
-        result.push(med);
-      }
-    });
-    return result.sort((a, b) => {
-      const aDate = new Date(
-        Number(a.datE_PER.slice(2, 6)),
-        Number(a.datE_PER.slice(0, 2)) - 1
-      );
-      const bDate = new Date(
-        Number(b.datE_PER.slice(2, 6)),
-        Number(b.datE_PER.slice(0, 2)) - 1
-      );
-      return aDate.getTime() - bDate.getTime();
-    });
-  }, [medicines, filterMonth, filterYear]);
-
   // -------------------- Impression --------------------
   const handlePrint = () => {
     const printContent = tableRef.current?.innerHTML;
@@ -158,171 +109,106 @@ export default function HistoriqueVentes() {
     }
   };
 
+  const inputCls =
+    "px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all";
+  const thCls =
+    "text-left text-[11px] font-semibold uppercase tracking-wider text-slate-600 bg-slate-50";
+  const tdCls = "text-slate-700 text-sm";
+
   return (
-    <div className="p-6 flex flex-col space-y-6 bg-gradient-to-br from-emerald-50 to-emerald-100">
-      <Header titre="Gestion d'Inventaires" />
-
-      {/* -------------------- Filter Sales -------------------- */}
-      <div className="flex items-center justify-between bg-white p-4 rounded-2xl shadow">
-        <div className="flex items-center space-x-4">
-          <label className="font-medium">Filtrer entre deux dates :</label>
-          <input
-            type="date"
-            className="border rounded-lg px-2 py-1"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-          />
-          <span>—</span>
-          <input
-            type="date"
-            className="border rounded-lg px-2 py-1"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-          />
-          <button
-            className="px-3 py-1 bg-blue-500 text-white rounded-lg"
-            onClick={() => {
-              setStartDate("");
-              setEndDate("");
-            }}
-          >
-            Réinitialiser
-          </button>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-lg font-semibold">
-            Total : {totalSalesFiltered.toFixed(2)} MAD
+    <div className="min-h-screen bg-slate-50">
+      <Header titre="Historique des Ventes" />
+      <div className="max-w-[1600px] mx-auto px-6 pt-5 pb-8 space-y-5">
+        {/* -------------------- Filter Sales -------------------- */}
+        <div className="flex flex-wrap items-center justify-between gap-4 bg-white border border-slate-200 rounded-xl shadow-sm p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-sm font-medium text-slate-700">
+              Filtrer entre deux dates
+            </label>
+            <input
+              type="date"
+              className={inputCls}
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+            <span className="text-slate-400">—</span>
+            <input
+              type="date"
+              className={inputCls}
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+            <button
+              className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
+              onClick={() => {
+                setStartDate("");
+                setEndDate("");
+              }}
+            >
+              Réinitialiser
+            </button>
           </div>
-          <button
-            className="px-3 py-1 bg-green-600 text-white rounded-lg"
-            onClick={handlePrint}
-          >
-            🖨️ Imprimer Caisse du Jour
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-sm">
+              <span className="text-slate-500">Total · </span>
+              <span className="font-semibold text-emerald-600 tabular-nums">
+                {totalSalesFiltered.toFixed(2)} MAD
+              </span>
+            </div>
+            <button
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-sm font-medium shadow-sm transition-colors"
+              onClick={handlePrint}
+            >
+              Imprimer Caisse du Jour
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* -------------------- Table Sales -------------------- */}
-      <div ref={tableRef} className="bg-white p-4 rounded-2xl shadow overflow-x-auto">
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableHeadCell>Date</TableHeadCell>
-              <TableHeadCell>Désignation</TableHeadCell>
-              <TableHeadCell>Total Articles</TableHeadCell>
-              <TableHeadCell>Sous Total</TableHeadCell>
-              <TableHeadCell>Type de Vente</TableHeadCell>
-              <TableHeadCell>Responsable</TableHeadCell>
-              <TableHeadCell>Nom Client</TableHeadCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredSales.length === 0 ? (
+        {/* -------------------- Table Sales -------------------- */}
+        <div
+          ref={tableRef}
+          className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto"
+        >
+          <Table>
+            <TableHead>
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-4">
-                  Aucune vente trouvée pour la date sélectionnée.
-                </TableCell>
+                <TableHeadCell className={thCls}>Date</TableHeadCell>
+                <TableHeadCell className={thCls}>Désignation</TableHeadCell>
+                <TableHeadCell className={thCls}>Articles</TableHeadCell>
+                <TableHeadCell className={thCls}>Sous-Total</TableHeadCell>
+                <TableHeadCell className={thCls}>Type</TableHeadCell>
+                <TableHeadCell className={thCls}>Responsable</TableHeadCell>
+                <TableHeadCell className={thCls}>Client</TableHeadCell>
               </TableRow>
-            ) : (
-              filteredSales.map((sale) => (
-                <TableRow key={sale.salesID}>
-                  <TableCell>{formatDate(sale.date)}</TableCell>
-                  <TableCell>{sale.medicines}</TableCell>
-                  <TableCell>{sale.totalArticles}</TableCell>
-                  <TableCell>{sale.totalPrice.toFixed(2)}</TableCell>
-                  <TableCell>{sale.typeDeVente}</TableCell>
-                  <TableCell>{sale.responsable_Vente}</TableCell>
-                  <TableCell>{sale.nomClient}</TableCell>
+            </TableHead>
+            <TableBody className="divide-y divide-slate-100">
+              {filteredSales.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-slate-400 text-sm">
+                    Aucune vente trouvée pour la période sélectionnée.
+                  </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              ) : (
+                filteredSales.map((sale) => (
+                  <TableRow key={sale.salesID} className="bg-white hover:bg-slate-50 transition-colors">
+                    <TableCell className={tdCls}>{formatDate(sale.date)}</TableCell>
+                    <TableCell className="text-slate-900 text-sm font-medium">
+                      {sale.medicines}
+                    </TableCell>
+                    <TableCell className={`${tdCls} tabular-nums`}>{sale.totalArticles}</TableCell>
+                    <TableCell className={`${tdCls} tabular-nums font-semibold`}>
+                      {sale.totalPrice.toFixed(2)}
+                    </TableCell>
+                    <TableCell className={tdCls}>{sale.typeDeVente}</TableCell>
+                    <TableCell className={tdCls}>{sale.responsable_Vente}</TableCell>
+                    <TableCell className={tdCls}>{sale.nomClient}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
 
-      {/* -------------------- Filter péremption -------------------- */}
-      <div className="flex items-center gap-4 mb-4">
-        <label className="font-medium">Filtrer par péremption :</label>
-
-        <select
-          className="border rounded-lg px-2 py-1"
-          value={filterMonth}
-          onChange={(e) => setFilterMonth(e.target.value)}
-        >
-          <option value="">Tous les mois</option>
-          {[...Array(12)].map((_, i) => {
-            const val = (i + 1).toString().padStart(2, "0");
-            return (
-              <option key={val} value={val}>
-                {val}
-              </option>
-            );
-          })}
-        </select>
-
-        <select
-          className="border rounded-lg px-2 py-1"
-          value={filterYear}
-          onChange={(e) => setFilterYear(e.target.value)}
-        >
-          <option value="">Toutes les années</option>
-          {[...Array(5)].map((_, i) => {
-            const year = new Date().getFullYear() + i;
-            return (
-              <option key={year} value={year.toString()}>
-                {year}
-              </option>
-            );
-          })}
-        </select>
-
-        <button
-          className="px-3 py-1 bg-blue-500 text-white rounded-lg"
-          onClick={() => {
-            setFilterMonth("");
-            setFilterYear("");
-          }}
-        >
-          Réinitialiser
-        </button>
-      </div>
-
-      {/* -------------------- Table Proche Péremption -------------------- */}
-      <div className="bg-white p-4 rounded-2xl shadow overflow-x-auto">
-        <h2 className="text-lg font-bold mb-4 text-red-600">
-          Médicaments Proches de Péremption
-        </h2>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableHeadCell>Nom Médicament</TableHeadCell>
-              <TableHeadCell>Code</TableHeadCell>
-              <TableHeadCell>Quantité</TableHeadCell>
-              <TableHeadCell>Date Péremption</TableHeadCell>
-              <TableHeadCell>Catégorie</TableHeadCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {prochePeremptionFiltered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-4">
-                  Aucun médicament proche de péremption pour le filtre
-                  sélectionné.
-                </TableCell>
-              </TableRow>
-            ) : (
-              prochePeremptionFiltered.map((med) => (
-                <TableRow key={med.id}>
-                  <TableCell>{med.nom_medicament}</TableCell>
-                  <TableCell>{med.code}</TableCell>
-                  <TableCell>{med.quantite}</TableCell>
-                  <TableCell>{med.datE_PER}</TableCell>
-                  <TableCell>{med.categorie}</TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
       </div>
     </div>
   );

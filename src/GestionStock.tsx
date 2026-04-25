@@ -113,7 +113,9 @@ const GestionStock: React.FC = () => {
   }, [filteredMedicines, page]);
 
   // Stats
+  const totalProducts = filteredMedicines.length;
   const productsInStock = filteredMedicines.filter((m) => (m.quantite ?? 0) > 0).length;
+  const productsOutOfStock = totalProducts - productsInStock;
   const totalStockValue = filteredMedicines.reduce(
     (acc, m) => acc + (m.ppv ?? 0) * (m.quantite ?? 0),
     0
@@ -128,7 +130,7 @@ const GestionStock: React.FC = () => {
 
   const handleDialogChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    const updatedValue = ["quantite", "ppv", "ph"].includes(name) ? Number(value) : value;
+    const updatedValue = ["quantite", "ppv"].includes(name) ? Number(value) : value;
     setDialogState((prev) => ({ ...prev, [name]: updatedValue }));
   };
 
@@ -142,9 +144,11 @@ const GestionStock: React.FC = () => {
   FORME: dialogState.forme,
   PRESENTATION: dialogState.presentation,
   PPV: dialogState.ppv,
-  PH: dialogState.ph,
- quantite: dialogState.quantite, // use exact name with accent
-  DATE_PER: dialogState.datE_PER,   // match case
+  PH: dialogState.ph === null || dialogState.ph === undefined || dialogState.ph === ""
+    ? null
+    : String(dialogState.ph),
+ Quantite: dialogState.quantite,
+  DATE_PER: dialogState.datE_PER,
   categorie: dialogState.categorie
     };
 
@@ -209,86 +213,203 @@ const GestionStock: React.FC = () => {
   };
 
   return (
-    <Box className="bg-gradient-to-br from-emerald-50 to-emerald-100" p={3}>
+    <Box className="min-h-screen bg-slate-50">
       <Header titre="Gestion Stocks" />
-      <Typography variant="h4" mb={3} fontWeight="bold">Gestion du Stock</Typography>
-
-      {/* Toolbar + Stats */}
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={2} mb={3} alignItems="center">
-        <TextField
-          label="Recherche par nom"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          sx={{ minWidth: 250 }}
-        />
-        <TextField
-          select
-          label="Filtrer par catégorie"
-          value={categorieFilter}
-          onChange={(e) => setCategorieFilter(e.target.value)}
-          SelectProps={{ native: true }}
-          sx={{ minWidth: 200 }}
+      <Box sx={{ maxWidth: 1600, mx: "auto", px: 3, pt: 4, pb: 5 }}>
+        <Typography
+          variant="h5"
+          mb={3}
+          sx={{ fontWeight: 600, color: "#0f172a", letterSpacing: "-0.01em" }}
         >
-          <option value="">Toutes</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </TextField>
-        <Chip label={`Produits en stock: ${productsInStock}`} color="success" variant="outlined" />
-        <Chip label={`Valeur totale: ${totalStockValue.toLocaleString()} MAD`} color="primary" variant="outlined" />
-      </Stack>
+          Gestion du Stock
+        </Typography>
 
-      {/* Table */}
-      <TableContainer component={Paper} sx={{ maxHeight: 500 }} ref={tableRef}>
-        <Table stickyHeader>
-          <TableHead>
-            <TableRow>
-              {["ID","Code","Nom","Forme","Catégorie","Quantité","PPV","PH","Date Péremption","Actions"].map((h) => (
-                <TableCell key={h} sx={{ fontWeight: "bold", fontSize: 15 }}>{h}</TableCell>
+        {/* Toolbar + Stats */}
+        <Box
+          sx={{
+            bgcolor: "#fff",
+            border: "1px solid #e2e8f0",
+            borderRadius: 3,
+            p: 2.5,
+            mb: 3,
+            boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+          }}
+        >
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            alignItems={{ sm: "center" }}
+            flexWrap="wrap"
+          >
+            <TextField
+              size="small"
+              label="Recherche par nom"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              sx={{ minWidth: 260 }}
+            />
+            <TextField
+              size="small"
+              select
+              label="Filtrer par catégorie"
+              value={categorieFilter}
+              onChange={(e) => setCategorieFilter(e.target.value)}
+              SelectProps={{ native: true }}
+              sx={{ minWidth: 220 }}
+            >
+              <option value="">Toutes</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
               ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {paginatedMedicines.map((m) => (
-              <TableRow key={m.id} data-id={m.id} sx={{
-                backgroundColor: m.id === lastEditedId ? "#e0f7fa" : "inherit",
-                "&:hover": { backgroundColor: "#f1f8e9" },
-              }}>
-                <TableCell>{m.id}</TableCell>
-                <TableCell>{m.code}</TableCell>
-                <TableCell sx={{ fontSize: 14 }}>{m.nom_medicament}</TableCell>
-                <TableCell>{m.forme}</TableCell>
-                <TableCell>{m.categorie}</TableCell>
-                <TableCell>{m.quantite}</TableCell>
-                <TableCell>{m.ppv}</TableCell>
-                <TableCell>{m.ph}</TableCell>
-                <TableCell>{m.datE_PER}</TableCell>
-                <TableCell>
-                  <Stack direction="row" spacing={1}>
-                    <Button size="small" variant="outlined" onClick={() => handleEdit(m)}>Modifier</Button>
-                    <Button size="small" variant="outlined" color="warning" onClick={() => handleDuplicate(m)}>Dupliquer</Button>
-                    <Button size="small" variant="outlined" color="error" onClick={() => handleDelete(m.id)}>Supprimer</Button>
-                  </Stack>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TextField>
+            <Box sx={{ flex: 1 }} />
+            <Chip
+              label={`${totalProducts.toLocaleString()} au total`}
+              size="small"
+              sx={{
+                bgcolor: "#f1f5f9",
+                color: "#334155",
+                fontWeight: 600,
+                border: "1px solid #e2e8f0",
+              }}
+            />
+            <Chip
+              label={`${productsInStock.toLocaleString()} en stock`}
+              size="small"
+              sx={{
+                bgcolor: "#ecfdf5",
+                color: "#047857",
+                fontWeight: 600,
+                border: "1px solid #a7f3d0",
+              }}
+            />
+            <Chip
+              label={`${productsOutOfStock.toLocaleString()} hors stock`}
+              size="small"
+              sx={{
+                bgcolor: "#fffbeb",
+                color: "#b45309",
+                fontWeight: 600,
+                border: "1px solid #fcd34d",
+              }}
+            />
+            <Chip
+              label={`Valeur: ${totalStockValue.toLocaleString()} MAD`}
+              size="small"
+              sx={{
+                bgcolor: "#eff6ff",
+                color: "#1d4ed8",
+                fontWeight: 600,
+                border: "1px solid #bfdbfe",
+              }}
+            />
+          </Stack>
+        </Box>
 
-      {/* Pagination */}
-      <Stack direction="row" spacing={2} mt={2} alignItems="center">
-        <Button disabled={page === 1} onClick={() => setPage((prev) => prev - 1)}>Précédent</Button>
-        <Typography>Page {page} / {totalPages}</Typography>
-        <Button disabled={page === totalPages} onClick={() => setPage((prev) => prev + 1)}>Suivant</Button>
-      </Stack>
+        {/* Table */}
+        <TableContainer
+          component={Paper}
+          sx={{
+            maxHeight: 560,
+            border: "1px solid #e2e8f0",
+            borderRadius: 3,
+            boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+          }}
+          ref={tableRef}
+        >
+          <Table stickyHeader>
+            <TableHead>
+              <TableRow>
+                {["ID", "Code", "Nom", "Forme", "Présentation", "Catégorie", "Quantité", "PPV", "PH", "Péremption", "Actions"].map((h) => (
+                  <TableCell
+                    key={h}
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      color: "#64748b",
+                      bgcolor: "#f8fafc",
+                      borderBottom: "1px solid #e2e8f0",
+                    }}
+                  >
+                    {h}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {paginatedMedicines.map((m) => (
+                <TableRow
+                  key={m.id}
+                  data-id={m.id}
+                  sx={{
+                    backgroundColor: m.id === lastEditedId ? "#ecfdf5" : "inherit",
+                    "&:hover": { backgroundColor: "#f8fafc" },
+                    "& td": { fontSize: 13.5, color: "#334155", borderBottom: "1px solid #f1f5f9" },
+                  }}
+                >
+                  <TableCell sx={{ color: "#94a3b8 !important", fontFamily: "monospace" }}>{m.id}</TableCell>
+                  <TableCell sx={{ fontFamily: "monospace" }}>{m.code}</TableCell>
+                  <TableCell sx={{ color: "#0f172a !important", fontWeight: 500 }}>{m.nom_medicament}</TableCell>
+                  <TableCell>{m.forme}</TableCell>
+                  <TableCell>{m.presentation}</TableCell>
+                  <TableCell>{m.categorie}</TableCell>
+                  <TableCell sx={{ fontVariantNumeric: "tabular-nums" }}>{m.quantite}</TableCell>
+                  <TableCell sx={{ fontVariantNumeric: "tabular-nums" }}>{m.ppv}</TableCell>
+                  <TableCell sx={{ fontVariantNumeric: "tabular-nums" }}>{m.ph}</TableCell>
+                  <TableCell sx={{ fontVariantNumeric: "tabular-nums" }}>{m.datE_PER}</TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={1}>
+                      <Button size="small" variant="outlined" onClick={() => handleEdit(m)} sx={{ textTransform: "none", borderRadius: 2 }}>
+                        Modifier
+                      </Button>
+                      <Button size="small" variant="outlined" color="warning" onClick={() => handleDuplicate(m)} sx={{ textTransform: "none", borderRadius: 2 }}>
+                        Dupliquer
+                      </Button>
+                      <Button size="small" variant="outlined" color="error" onClick={() => handleDelete(m.id)} sx={{ textTransform: "none", borderRadius: 2 }}>
+                        Supprimer
+                      </Button>
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+
+        {/* Pagination */}
+        <Stack direction="row" spacing={2} mt={2.5} alignItems="center" justifyContent="flex-end">
+          <Button
+            size="small"
+            disabled={page === 1}
+            onClick={() => setPage((prev) => prev - 1)}
+            sx={{ textTransform: "none", borderRadius: 2 }}
+          >
+            Précédent
+          </Button>
+          <Typography sx={{ fontSize: 13, color: "#64748b", fontVariantNumeric: "tabular-nums" }}>
+            Page {page} / {totalPages}
+          </Typography>
+          <Button
+            size="small"
+            disabled={page === totalPages}
+            onClick={() => setPage((prev) => prev + 1)}
+            sx={{ textTransform: "none", borderRadius: 2 }}
+          >
+            Suivant
+          </Button>
+        </Stack>
+      </Box>
 
       {/* Edit Dialog */}
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Modifier le Médicament</DialogTitle>
         <DialogContent>
           <Stack spacing={2} mt={1}>
-            {["code","nom_medicament","forme","quantite","ppv","ph","datE_PER","categorie"].map((field) => (
+            {["code","nom_medicament","forme","presentation","quantite","ppv","ph","datE_PER","categorie"].map((field) => (
               field === "categorie" ? (
                 <Autocomplete
                   key={field}

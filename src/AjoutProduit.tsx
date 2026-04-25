@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Button } from "flowbite-react";
 import axios from "axios";
 import Header from "./header";
 import { Pill } from "lucide-react";
@@ -68,87 +67,109 @@ export default function AjoutProduit() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-emerald-100 flex flex-col">
-      {/* Header fixed at top */}
-      <div className="fixed top-0 left-0 w-full z-50 bg-white shadow-md">
-        <Header  titre="Ajout d’un Nouveau Produit" />
-      </div>
+  const inputCls =
+    "w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all";
+  const labelCls =
+    "text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5 block";
 
-      {/* Content section */}
-      <div className="flex flex-1 items-center justify-center mt-32 mb-10 px-4">
-        <div className="bg-white p-10 rounded-2xl shadow-xl w-full max-w-md text-center">
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <Header titre="Ajout d’un Nouveau Produit" />
+
+      <div className="flex flex-1 items-center justify-center px-4 py-10">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
           {/* Logo + Title */}
-          <div className="flex items-center justify-center mb-6">
-            <Pill size={40} className="text-emerald-600 mr-2" />
-            <h1 className="text-2xl font-bold text-emerald-700">PharmaSoft</h1>
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-sm mb-3">
+              <Pill size={22} className="text-white" />
+            </div>
+            <h1 className="text-lg font-semibold text-slate-900 tracking-tight">
+              Nouveau Produit
+            </h1>
+            <p className="text-xs text-slate-500 mt-1">
+              Ajoutez un médicament à votre inventaire
+            </p>
           </div>
 
-          <h2 className="text-lg font-semibold mb-4 text-gray-700">
-            Ajout d’un Nouveau Produit
-          </h2>
-
           {/* Form */}
-          <div className="flex flex-col space-y-3">
-            <input
-              type="text"
-              name="codeBarre"
-              placeholder="Code barre du médicament"
-              className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-emerald-400"
-              value={formData.codeBarre}
-              onChange={handleChange}
-            />
+          <div className="space-y-4">
+            <div>
+              <label className={labelCls}>Code-barres</label>
+              <input
+                type="text"
+                name="codeBarre"
+                placeholder="Ex: 6111234567890"
+                className={inputCls}
+                value={formData.codeBarre}
+                onChange={handleChange}
+              />
+            </div>
 
-            <input
-              type="text"
-              name="designation"
-              placeholder="Désignation du médicament"
-              className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-emerald-400"
-              value={formData.designation}
-              onChange={handleChange}
-            />
+            <div>
+              <label className={labelCls}>Désignation</label>
+              <input
+                type="text"
+                name="designation"
+                placeholder="Nom du médicament"
+                className={inputCls}
+                value={formData.designation}
+                onChange={handleChange}
+              />
+            </div>
 
-            <input
-              type="date"
-              name="datePeremption"
-              placeholder="Date de péremption"
-              className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-emerald-400"
-              onChange={handleChange}
-            />
+            <div>
+              <label className={labelCls}>Date de péremption</label>
+              <input
+                type="date"
+                name="datePeremption"
+                className={inputCls}
+                onChange={handleChange}
+              />
+            </div>
 
-            <input
-              type="number"
-              name="ppv"
-              placeholder="PPV"
-              className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-emerald-400"
-              value={formData.ppv}
-              onChange={handleChange}
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>PPV</label>
+                <input
+                  type="number"
+                  name="ppv"
+                  placeholder="0.00"
+                  className={inputCls}
+                  value={formData.ppv}
+                  onChange={handleChange}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Forme</label>
+                <input
+                  type="text"
+                  name="forme"
+                  placeholder="Comprimé, sirop..."
+                  className={inputCls}
+                  value={formData.forme}
+                  onChange={handleChange}
+                />
+              </div>
+            </div>
 
-            <input
-              type="text"
-              name="presentation"
-              placeholder="Présentation"
-              className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-emerald-400"
-              value={formData.presentation}
-              onChange={handleChange}
-            />
+            <div>
+              <label className={labelCls}>Présentation</label>
+              <input
+                type="text"
+                name="presentation"
+                placeholder="Boîte de 20..."
+                className={inputCls}
+                value={formData.presentation}
+                onChange={handleChange}
+              />
+            </div>
 
-            <input
-              type="text"
-              name="forme"
-              placeholder="Forme"
-              className="border rounded-lg p-2 w-full focus:ring-2 focus:ring-emerald-400"
-              value={formData.forme}
-              onChange={handleChange}
-            />
-
-            <Button
-              className="w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg"
+            <button
+              className="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg text-sm font-medium shadow-sm transition-colors"
               onClick={handleSubmit}
             >
-              ✅ Confirmer l’ajout
-            </Button>
+              Confirmer l’ajout
+            </button>
           </div>
         </div>
       </div>

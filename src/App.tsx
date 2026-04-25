@@ -13,6 +13,8 @@ import GestionCommands from "./GestionCommands";
 import GestionStock from "./GestionStock";
 import GestionCredit from "./Credit";
 import SettingsPage from "./Reglages";
+import MiseAJourPrix from "./MiseAJourPrix";
+import ProchesPerimes from "./ProchesPerimes";
 
 function ProtectedRoute({
   children,
@@ -93,6 +95,22 @@ export default function App() {
           element={
             <ProtectedRoute allowedForNonAdmin>
               <GestionCredit />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ProchesPerimes"
+          element={
+            <ProtectedRoute allowedForNonAdmin>
+              <ProchesPerimes />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/MiseAJourPrix"
+          element={
+            <ProtectedRoute>
+              <MiseAJourPrix />
             </ProtectedRoute>
           }
         />

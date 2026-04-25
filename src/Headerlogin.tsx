@@ -1,20 +1,18 @@
-import { FaCapsules } from "react-icons/fa";
+import { FaPlus } from "react-icons/fa";
 
 export default function HeaderLogic() {
   return (
-    <div
-      className="flex items-center justify-between bg-gradient-to-r from-green-600 to-emerald-800 text-white px-8 py-4 rounded-xl shadow-lg"
-      style={{ fontFamily: "Poppins, sans-serif" }}
-    >
-      {/* Left: Logo + Title */}
-      <div className="flex items-center space-x-4">
-        <FaCapsules className="text-5xl text-yellow-300 drop-shadow-md" />
+    <div className="flex items-center justify-between px-8 py-4 bg-white border-b border-green-100">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-lg bg-green-600 flex items-center justify-center shadow-sm">
+          <FaPlus className="text-white text-lg" />
+        </div>
         <div className="flex flex-col leading-tight">
-          <span className="text-2xl font-extrabold tracking-wide">
+          <span className="text-lg font-bold text-gray-800">
             Pharmacie El Abawain
           </span>
-          <span className="text-sm font-light opacity-90">
-            Welcome · Let’s Connect
+          <span className="text-xs text-gray-500">
+            Votre santé, notre priorité
           </span>
         </div>
       </div>

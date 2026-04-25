@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :5173)",
+      "Bash(tasklist *)",
+      "Bash(findstr :7194)",
+      "Bash(taskkill *)",
+      "Bash(sc query *)",
+      "Bash(findstr :1433)",
+      "Bash(net start *)",
+      "Bash(pip show *)",
+      "Bash(pip install *)",
+      "Bash(python *)",
+      "Bash(kill %1)",
+      "Bash(where cloudflared *)",
+      "Bash(cloudflared --version)",
+      "Bash(dotnet build *)",
+      "Bash(curl -sS -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:7194/test)",
+      "Bash(curl -sS -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:7194/monitor/)",
+      "Bash(curl -sS -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:7194/monitor/index.html)",
+      "Bash(curl -sS -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:7194/api/audit)"
+    ]
+  }
+}
